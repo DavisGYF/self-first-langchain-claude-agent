@@ -44,16 +44,22 @@ export async function POST(request: NextRequest) {
     // RAG 检索相关文档
     let context = '';
     let retrievedDocs: any[] = [];
+    let hasRelevantDocs = false;
 
     if (useRag) {
       try {
         const documents = await retrieveDocuments(message, 3);
+        // 只有检索到相关内容时才使用 RAG
         if (documents.length > 0) {
           context = formatContext(documents);
           retrievedDocs = documents.map((doc: any) => ({
             source: doc.metadata.source,
             content: doc.pageContent.substring(0, 200) + '...',
           }));
+          hasRelevantDocs = true;
+        } else {
+          // 没有检索到相关内容，使用普通模式
+          console.log('RAG: 未找到相关内容，使用普通模式');
         }
       } catch (error) {
         console.warn('RAG 检索失败，使用普通模式:', error);
@@ -67,9 +73,9 @@ export async function POST(request: NextRequest) {
       temperature: 0.7,
     });
 
-    // 构建系统提示词（如果使用了 RAG）
-    const systemPrompt = context
-      ? `以下是从知识库中检索到的相关信息，请基于这些信息回答用户的问题。如果信息不足以回答问题，请说明需要更多信息。
+    // 构建系统提示词（只有检索到相关内容时才使用）
+    const systemPrompt = hasRelevantDocs
+      ? `以下是从知识库中检索到的相关信息，请基于这些信息回答用户的问题。如果信息不足以回答问题，可以结合你的通用知识补充。
 
 【相关知识】
 ${context}
@@ -97,11 +103,8 @@ ${context}
       }
     }
 
-    // 添加当前消息
-    const finalMessage = context
-      ? `${message}\n\n（请基于上述知识库内容回答）`
-      : message;
-    messages.push(new HumanMessage(finalMessage));
+    // 添加当前消息（不需要额外提示，让大模型自然回答）
+    messages.push(new HumanMessage(message));
 
     // 使用流式调用 - 需要 await stream()
     const stream = await model.stream(messages);
@@ -112,12 +115,12 @@ ${context}
     const readableStream = new ReadableStream({
       async start(controller) {
         try {
-          // 先发送元数据（检索到的文档）
-          if (!hasSentMeta && (retrievedDocs.length > 0 || useRag)) {
+          // 先发送元数据（只有检索到文档时才发送）
+          if (!hasSentMeta && retrievedDocs.length > 0) {
             const meta = JSON.stringify({
               metadata: {
                 retrievedDocs,
-                usedRag: useRag && retrievedDocs.length > 0,
+                usedRag: hasRelevantDocs,
               },
             });
             controller.enqueue(encoder.encode(`data: ${meta}\n\n`));
