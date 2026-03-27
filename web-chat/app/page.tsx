@@ -1,19 +1,16 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
-import remarkGithub from 'remark-github';
 import {
   Send,
   Plus,
   Copy,
   Check,
   Download,
-  Trash2,
   Sparkles,
   Bot,
   User,
-  X
 } from 'lucide-react';
 
 interface Message {
@@ -307,7 +304,7 @@ export default function Home() {
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     ) : (
                       <div className="prose prose-invert max-w-none text-sm">
-                        <ReactMarkdown remarkPlugins={[remarkGithub]}>
+                        <ReactMarkdown>
                           {msg.content}
                         </ReactMarkdown>
                       </div>
