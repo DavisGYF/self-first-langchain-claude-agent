@@ -1,55 +1,111 @@
-import { Chroma } from '@langchain/community/vectorstores/chroma';
-import { OpenAIEmbeddings } from '@langchain/openai';
 import { RecursiveCharacterTextSplitter } from '@langchain/textsplitters';
 import { Document } from '@langchain/core/documents';
-import type { ChromaClient, Collection } from 'chromadb';
+import path from 'path';
+import fs from 'fs';
 
-// ChromaDB 客户端单例
-let chromaClient: ChromaClient | null = null;
+// 知识库数据存储路径
+const KNOWLEDGE_BASE_PATH = path.join(process.cwd(), 'knowledge_base');
 
-async function getChromaClient(): Promise<ChromaClient> {
-  if (!chromaClient) {
-    const { ChromaClient: ChromaClientClass } = await import('chromadb');
-    chromaClient = new ChromaClientClass({
-      path: './chroma_db',
-    });
-  }
-  return chromaClient;
+// 确保目录存在
+if (!fs.existsSync(KNOWLEDGE_BASE_PATH)) {
+  fs.mkdirSync(KNOWLEDGE_BASE_PATH, { recursive: true });
 }
 
-// 向量存储配置
+// 简单的本地文档存储（使用关键词匹配）
+interface StoredDocument {
+  content: string;
+  keywords: string[];
+  metadata: {
+    source: string;
+    uploadedAt: string;
+  };
+}
+
 const COLLECTION_NAME = 'knowledge_base';
+let cachedDocs: StoredDocument[] = [];
+
+// 从缓存文件加载文档
+function loadCachedDocs(): StoredDocument[] {
+  const cachePath = path.join(KNOWLEDGE_BASE_PATH, `${COLLECTION_NAME}.json`);
+  if (fs.existsSync(cachePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(cachePath, 'utf-8'));
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+// 保存文档到缓存文件
+function saveCachedDocs(docs: StoredDocument[]): void {
+  const cachePath = path.join(KNOWLEDGE_BASE_PATH, `${COLLECTION_NAME}.json`);
+  fs.writeFileSync(cachePath, JSON.stringify(docs, null, 2));
+}
 
 /**
- * 获取或创建向量存储
+ * 提取中文和英文关键词
  */
-export async function getVectorStore() {
-  const apiKey = process.env.LLM_API_KEY || process.env.OPENAI_API_KEY;
-  const baseUrl = process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL;
+function extractKeywords(text: string): string[] {
+  const keywords: Set<string> = new Set();
 
-  const embeddings = new OpenAIEmbeddings({
-    openAIApiKey: apiKey,
-    configuration: baseUrl ? { baseURL: baseUrl } : undefined,
+  // 提取英文单词（至少 3 个字母）
+  const englishWords = text.match(/\b[a-zA-Z]{3,}\b/g);
+  englishWords?.forEach(word => keywords.add(word.toLowerCase()));
+
+  // 提取中文字符作为关键词（每个字作为一个关键词）
+  const chineseChars = text.match(/[\u4e00-\u9fa5]/g);
+  chineseChars?.forEach(char => keywords.add(char));
+
+  // 提取连续的中文词组（2-4 个字）
+  const chinesePhrases = text.match(/[\u4e00-\u9fa5]{2,4}/g);
+  chinesePhrases?.forEach(phrase => keywords.add(phrase));
+
+  return Array.from(keywords);
+}
+
+/**
+ * 计算关键词匹配得分
+ */
+function calculateMatchScore(docKeywords: string[], queryKeywords: string[]): number {
+  let score = 0;
+  const docSet = new Set(docKeywords);
+
+  queryKeywords.forEach(keyword => {
+    if (docSet.has(keyword)) {
+      score++;
+    }
   });
 
-  const client = await getChromaClient();
+  return score / Math.max(queryKeywords.length, 1);
+}
 
-  let collection: Collection;
-  const existingCollections = await client.listCollections();
+/**
+ * 检索相关文档（使用关键词匹配）
+ */
+export async function retrieveDocuments(query: string, topK: number = 3): Promise<Document[]> {
+  cachedDocs = loadCachedDocs();
 
-  if (existingCollections.some(c => c.name === COLLECTION_NAME)) {
-    collection = await client.getCollection({ name: COLLECTION_NAME });
-  } else {
-    collection = await client.createCollection({
-      name: COLLECTION_NAME,
-      metadata: { description: 'RAG Knowledge Base' },
-    });
+  if (cachedDocs.length === 0) {
+    return [];
   }
 
-  return Chroma.fromExistingCollection(embeddings, {
-    collectionName: COLLECTION_NAME,
-    index: client,
-  });
+  const queryKeywords = extractKeywords(query);
+
+  // 计算所有文档的匹配得分
+  const scoredDocs = cachedDocs.map((doc) => ({
+    ...doc,
+    score: calculateMatchScore(doc.keywords, queryKeywords),
+  }));
+
+  // 按得分排序并取前 K 个
+  scoredDocs.sort((a, b) => b.score - a.score);
+  const topDocs = scoredDocs.filter(d => d.score > 0).slice(0, topK);
+
+  return topDocs.map(doc => new Document({
+    pageContent: doc.content,
+    metadata: doc.metadata,
+  }));
 }
 
 /**
@@ -129,23 +185,37 @@ export async function uploadDocument(
   content: string
 ): Promise<{ success: boolean; chunks: number; message: string }> {
   try {
-    const vectorStore = await getVectorStore();
     const splitter = getTextSplitter();
 
-    // 创建原始文档
-    const doc = new Document({
-      pageContent: content,
-      metadata: {
-        source: filename,
-        uploadedAt: new Date().toISOString(),
-      },
-    });
-
     // 分割文本
-    const docs = await splitter.splitDocuments([doc]);
+    const docs = await splitter.splitDocuments([
+      new Document({
+        pageContent: content,
+        metadata: {
+          source: filename,
+          uploadedAt: new Date().toISOString(),
+        },
+      }),
+    ]);
 
-    // 添加到向量存储
-    await vectorStore.addDocuments(docs, { ids: docs.map((_, i) => `${filename}-${i}`) });
+    // 为每个文档块提取关键词
+    const newDocs: StoredDocument[] = [];
+    for (const doc of docs) {
+      const keywords = extractKeywords(doc.pageContent);
+      newDocs.push({
+        content: doc.pageContent,
+        keywords,
+        metadata: {
+          source: doc.metadata.source as string,
+          uploadedAt: doc.metadata.uploadedAt as string,
+        },
+      });
+    }
+
+    // 加载现有文档并添加新文档
+    cachedDocs = loadCachedDocs();
+    cachedDocs.push(...newDocs);
+    saveCachedDocs(cachedDocs);
 
     return {
       success: true,
@@ -163,57 +233,13 @@ export async function uploadDocument(
 }
 
 /**
- * 检索相关文档
- */
-export async function retrieveDocuments(
-  query: string,
-  topK: number = 3
-): Promise<Document[]> {
-  try {
-    const vectorStore = await getVectorStore();
-    const results = await vectorStore.similaritySearch(query, topK);
-    return results;
-  } catch (error) {
-    console.error('检索失败:', error);
-    return [];
-  }
-}
-
-/**
- * 格式化检索结果为上下文字符串
- */
-export function formatContext(documents: Document[]): string {
-  if (documents.length === 0) {
-    return '';
-  }
-
-  return documents
-    .map((doc, index) => {
-      return `[来源：${doc.metadata.source}]
-${doc.pageContent}`;
-    })
-    .join('\n\n---\n\n');
-}
-
-/**
  * 删除指定文档
  */
 export async function deleteDocument(filename: string): Promise<boolean> {
   try {
-    const vectorStore = await getVectorStore();
-    const client = await getChromaClient();
-    const collection = await client.getCollection({ name: COLLECTION_NAME });
-
-    // 查找所有属于该文件的 IDs
-    const allData = await collection.get({ include: ['metadatas'] });
-    const idsToDelete = allData.ids?.filter(
-      (_, i) => allData.metadatas?.[i]?.['source'] === filename
-    ) || [];
-
-    if (idsToDelete.length > 0) {
-      await collection.delete({ ids: idsToDelete });
-    }
-
+    cachedDocs = loadCachedDocs();
+    const filteredDocs = cachedDocs.filter(doc => doc.metadata.source !== filename);
+    saveCachedDocs(filteredDocs);
     return true;
   } catch (error) {
     console.error('删除文档失败:', error);
@@ -228,16 +254,14 @@ export async function getDocumentList(): Promise<
   { filename: string; chunks: number; uploadedAt: string }[]
 > {
   try {
-    const client = await getChromaClient();
-    const collection = await client.getCollection({ name: COLLECTION_NAME });
-    const allData = await collection.get({ include: ['metadatas'] });
+    cachedDocs = loadCachedDocs();
 
     // 按文件名分组统计
     const docMap = new Map<string, { chunks: number; uploadedAt: string }>();
 
-    allData.metadatas?.forEach((meta) => {
-      const source = meta?.['source'] as string;
-      const uploadedAt = meta?.['uploadedAt'] as string;
+    cachedDocs.forEach((doc) => {
+      const source = doc.metadata.source;
+      const uploadedAt = doc.metadata.uploadedAt;
 
       if (source) {
         const existing = docMap.get(source) || { chunks: 0, uploadedAt: '' };
@@ -257,4 +281,20 @@ export async function getDocumentList(): Promise<
     console.error('获取文档列表失败:', error);
     return [];
   }
+}
+
+/**
+ * 格式化检索结果为上下文字符串
+ */
+export function formatContext(documents: Document[]): string {
+  if (documents.length === 0) {
+    return '';
+  }
+
+  return documents
+    .map((doc, index) => {
+      return `[来源：${doc.metadata.source}]
+${doc.pageContent}`;
+    })
+    .join('\n\n---\n\n');
 }

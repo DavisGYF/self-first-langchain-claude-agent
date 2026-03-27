@@ -134,7 +134,7 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <div className="fixed right-4 top-20 w-80 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden">
+    <div className="fixed right-0 top-20 w-80 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-0">
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-white/10">
         <div className="flex items-center gap-2">

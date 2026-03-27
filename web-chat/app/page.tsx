@@ -13,6 +13,7 @@ import {
   User,
   Database,
   BrainCircuit,
+  Square,
 } from 'lucide-react';
 import KnowledgeBase from '@/components/KnowledgeBase';
 import TypingIndicator from '@/components/TypingIndicator';
@@ -197,6 +198,14 @@ export default function Home() {
     }
   };
 
+  const handleStopGeneration = () => {
+    if (streamControllerRef.current) {
+      streamControllerRef.current.abort();
+      streamControllerRef.current = null;
+      setLoading(false);
+    }
+  };
+
   const handleCopy = async (content: string, index: number) => {
     await navigator.clipboard.writeText(content);
     setCopiedIndex(index);
@@ -241,7 +250,7 @@ export default function Home() {
       </div>
 
       {/* Header */}
-      <header className="relative z-10 bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4">
+      <header className="relative z-20 bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4" style={{ marginRight: '20rem' }}>
         <div className="flex items-center justify-between max-w-5xl mx-auto">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
@@ -287,7 +296,7 @@ export default function Home() {
       </header>
 
       {/* Messages Area */}
-      <div className="relative z-10 flex-1 overflow-y-auto">
+      <div className="relative z-20 flex-1 overflow-y-auto" style={{ marginRight: '20rem' }}>
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
@@ -405,7 +414,7 @@ export default function Home() {
       </div>
 
       {/* Input Area */}
-      <div className="relative z-10 bg-black/20 backdrop-blur-xl border-t border-white/10 p-4">
+      <div className="relative z-20 bg-black/20 backdrop-blur-xl border-t border-white/10 p-4" style={{ marginRight: '20rem' }}>
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
           <div className="flex gap-3 items-center bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
             <input
@@ -424,6 +433,16 @@ export default function Home() {
             >
               <Send className="w-5 h-5 text-white" />
             </button>
+            {loading && (
+              <button
+                type="button"
+                onClick={handleStopGeneration}
+                className="p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-xl transition-all"
+                title="停止生成"
+              >
+                <Square className="w-5 h-5 text-red-400" />
+              </button>
+            )}
           </div>
           <p className="text-center text-xs text-gray-500 mt-3">
             AI 生成的内容可能有误，请自行核实 • {useRag ? '🧠 RAG 知识库已启用' : '💬 普通对话模式'}
