@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Upload, FileText, Trash2, Database, X, Check } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, FileText, Trash2, Database, Check } from 'lucide-react';
 
 interface DocumentItem {
   filename: string;
@@ -29,11 +29,11 @@ export default function KnowledgeBase() {
   };
 
   // 初始加载和定时刷新
-  useState(() => {
+  useEffect(() => {
     fetchDocuments();
     const interval = setInterval(fetchDocuments, 30000); // 每 30 秒刷新一次
     return () => clearInterval(interval);
-  });
+  }, []);
 
   // 处理文件上传
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {

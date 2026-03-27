@@ -12,6 +12,7 @@ import {
   Bot,
   User,
   Database,
+  BrainCircuit,
 } from 'lucide-react';
 import KnowledgeBase from '@/components/KnowledgeBase';
 
@@ -40,6 +41,7 @@ export default function Home() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]);
   const [showRagSources, setShowRagSources] = useState<number | null>(null);
+  const [useRag, setUseRag] = useState(true); // RAG 开关
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -104,7 +106,7 @@ export default function Home() {
         body: JSON.stringify({
           message: userMessage,
           history: newMessages.map(({ role, content }) => ({ role, content })),
-          useRag: true,
+          useRag,
         }),
         signal: streamControllerRef.current.signal,
       });
@@ -250,6 +252,20 @@ export default function Home() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* RAG 开关 */}
+            <button
+              onClick={() => setUseRag(!useRag)}
+              className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
+                useRag
+                  ? 'bg-indigo-500/30 text-indigo-300 border border-indigo-500/50'
+                  : 'bg-white/5 text-gray-400 border border-white/10'
+              }`}
+              title={useRag ? 'RAG 已启用 - 基于知识库回答' : 'RAG 已禁用 - 普通模式'}
+            >
+              <BrainCircuit className="w-4 h-4" />
+              {useRag ? 'RAG ON' : 'RAG OFF'}
+            </button>
+
             <button
               onClick={handleExport}
               disabled={messages.length === 0}
@@ -420,7 +436,7 @@ export default function Home() {
             </button>
           </div>
           <p className="text-center text-xs text-gray-500 mt-3">
-            AI 生成的内容可能有误，请自行核实 • RAG 功能已启用
+            AI 生成的内容可能有误，请自行核实 • {useRag ? '🧠 RAG 知识库已启用' : '💬 普通对话模式'}
           </p>
         </form>
       </div>
