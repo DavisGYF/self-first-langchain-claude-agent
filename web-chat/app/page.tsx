@@ -29,10 +29,10 @@ interface RetrievedDoc {
 }
 
 const PRESET_QUESTIONS = [
-  "如何用 TypeScript 写一个 Promise 实现？",
+  "RAG 功能是如何工作的？",
+  "如何上传文档到知识库？",
   "解释一下 JavaScript 的事件循环机制",
-  "React Hooks 的原理是什么？",
-  "给我讲一个关于编程的笑话"
+  "React Hooks 的原理是什么？"
 ];
 
 export default function Home() {
