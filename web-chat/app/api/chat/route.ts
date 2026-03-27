@@ -1,14 +1,25 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { ChatOpenAI } from '@langchain/openai';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
+
+// 禁用缓存以确保每次请求都是动态的
+export const dynamic = 'force-dynamic';
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
 
 export async function POST(request: NextRequest) {
+  const encoder = new TextEncoder();
+
   try {
-    const { message } = await request.json();
+    const { message, history = [] } = await request.json();
 
     if (!message) {
-      return NextResponse.json(
-        { error: '消息不能为空' },
-        { status: 400 }
+      return new Response(
+        JSON.stringify({ error: '消息不能为空' }),
+        { status: 400, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -17,9 +28,9 @@ export async function POST(request: NextRequest) {
     const baseUrl = process.env.LLM_BASE_URL || process.env.OPENAI_BASE_URL;
 
     if (!apiKey) {
-      return NextResponse.json(
-        { error: '未配置 API Key' },
-        { status: 500 }
+      return new Response(
+        JSON.stringify({ error: '未配置 API Key' }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
     }
 
@@ -36,17 +47,61 @@ export async function POST(request: NextRequest) {
       temperature: 0.7,
     });
 
-    // 调用模型
-    const response = await model.invoke(message);
+    // 构建消息历史
+    const messages: Array<HumanMessage | AIMessage> = [];
 
-    return NextResponse.json({
-      reply: response.content,
+    // 添加历史消息（限制最多 20 条以节省 token）
+    const maxHistory = 20;
+    const recentHistory = history.slice(-maxHistory);
+
+    for (const msg of recentHistory) {
+      if (msg.role === 'user') {
+        messages.push(new HumanMessage(msg.content));
+      } else {
+        messages.push(new AIMessage(msg.content));
+      }
+    }
+
+    // 添加当前消息
+    messages.push(new HumanMessage(message));
+
+    // 使用流式调用 - 需要 await stream()
+    const stream = await model.stream(messages);
+
+    // 创建可读取流
+    const readableStream = new ReadableStream({
+      async start(controller) {
+        try {
+          for await (const chunk of stream) {
+            if (chunk.content) {
+              const data = `data: ${JSON.stringify({ content: chunk.content })}\n\n`;
+              controller.enqueue(encoder.encode(data));
+            }
+          }
+          // 发送结束标记
+          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        } catch (error) {
+          console.error('Stream error:', error);
+          controller.error(error);
+        } finally {
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(readableStream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Content-Type-Options': 'nosniff',
+      },
     });
   } catch (error) {
     console.error('API Error:', error);
-    return NextResponse.json(
-      { error: '服务错误：' + (error as Error).message },
-      { status: 500 }
+    return new Response(
+      JSON.stringify({ error: '服务错误：' + (error as Error).message }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }
