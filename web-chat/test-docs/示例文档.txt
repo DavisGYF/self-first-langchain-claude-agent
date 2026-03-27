@@ -1,0 +1,34 @@
+# 测试文档 - RAG 功能验证
+
+这是一份用于测试 RAG 功能的示例文档。
+
+## 项目信息
+
+项目名称：AI Self-First Agent
+技术栈：Next.js 14, TypeScript, Tailwind CSS, LangChain
+向量数据库：ChromaDB
+
+## 核心功能
+
+1. AI 智能对话 - 基于 DeepSeek LLM
+2. 流式响应 - Server-Sent Events 实时推送
+3. 对话历史 - 支持上下文记忆
+4. RAG 检索增强 - 基于知识库的智能问答
+
+## 使用方式
+
+1. 访问 http://localhost:3000
+2. 在右侧知识库面板上传文档
+3. 输入问题，AI 会自动检索相关知识
+
+## API 配置
+
+- API Key: LLM_API_KEY (环境变量)
+- Base URL: https://api.deepseek.com/v1
+
+## 注意事项
+
+- 文件大小限制：10MB
+- 支持格式：PDF, TXT, Markdown
+- 文本分割大小：1000 字符
+- 重叠区域：200 字符

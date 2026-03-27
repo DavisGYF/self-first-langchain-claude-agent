@@ -11,12 +11,19 @@ import {
   Sparkles,
   Bot,
   User,
+  Database,
 } from 'lucide-react';
+import KnowledgeBase from '@/components/KnowledgeBase';
 
 interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
+}
+
+interface RetrievedDoc {
+  source: string;
+  content: string;
 }
 
 const PRESET_QUESTIONS = [
@@ -31,6 +38,8 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]);
+  const [showRagSources, setShowRagSources] = useState<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const streamControllerRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +103,8 @@ export default function Home() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: userMessage,
-          history: newMessages.map(({ role, content }) => ({ role, content }))
+          history: newMessages.map(({ role, content }) => ({ role, content })),
+          useRag: true,
         }),
         signal: streamControllerRef.current.signal,
       });
@@ -110,6 +120,7 @@ export default function Home() {
       if (!reader) throw new Error('无法读取响应流');
 
       let accumulatedContent = '';
+      let docsReceived = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -125,6 +136,13 @@ export default function Home() {
 
             try {
               const parsed = JSON.parse(data);
+
+              // 处理检索到的文档元数据
+              if (parsed.metadata && !docsReceived) {
+                setRetrievedDocs(parsed.metadata.retrievedDocs || []);
+                docsReceived = true;
+              }
+
               if (parsed.content) {
                 accumulatedContent += parsed.content;
                 setMessages((prev) => {
@@ -281,61 +299,84 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
-              >
-                {msg.role === 'assistant' && (
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                    <Bot className="w-4 h-4 text-white" />
-                  </div>
-                )}
+            messages.map((msg, index) => {
+              const isLastAssistantMsg = msg.role === 'assistant' && index === messages.length - 1;
+              const hasSources = isLastAssistantMsg && retrievedDocs.length > 0;
 
-                <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div
-                    className={`rounded-2xl px-5 py-3 ${
-                      msg.role === 'user'
-                        ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
-                        : 'bg-white/10 backdrop-blur-sm text-gray-100 border border-white/10'
-                    }`}
-                  >
-                    {msg.role === 'user' ? (
-                      <p className="whitespace-pre-wrap">{msg.content}</p>
-                    ) : (
-                      <div className="prose prose-invert max-w-none text-sm">
-                        <ReactMarkdown>
-                          {msg.content}
-                        </ReactMarkdown>
+              return (
+                <div
+                  key={index}
+                  className={`flex gap-4 ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                >
+                  {msg.role === 'assistant' && (
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                      <Bot className="w-4 h-4 text-white" />
+                    </div>
+                  )}
+
+                  <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                    <div
+                      className={`rounded-2xl px-5 py-3 ${
+                        msg.role === 'user'
+                          ? 'bg-gradient-to-br from-indigo-500 to-purple-600 text-white'
+                          : 'bg-white/10 backdrop-blur-sm text-gray-100 border border-white/10'
+                      }`}
+                    >
+                      {msg.role === 'user' ? (
+                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                      ) : (
+                        <div className="prose prose-invert max-w-none text-sm">
+                          <ReactMarkdown>
+                            {msg.content}
+                          </ReactMarkdown>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* RAG 来源展示 */}
+                    {hasSources && (
+                      <div className="mt-2 p-3 bg-indigo-900/30 backdrop-blur-sm rounded-xl border border-indigo-500/30">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Database className="w-4 h-4 text-indigo-400" />
+                          <span className="text-xs font-semibold text-indigo-300">知识库引用</span>
+                        </div>
+                        <div className="space-y-1">
+                          {retrievedDocs.map((doc, i) => (
+                            <div key={i} className="text-xs">
+                              <span className="text-indigo-400">{doc.source}</span>
+                              <p className="text-gray-400 mt-0.5 line-clamp-2">{doc.content}</p>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
+
+                    <div className={`flex items-center gap-2 mt-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <span className="text-xs text-gray-500">{formatTime(msg.timestamp)}</span>
+                      {msg.role === 'assistant' && (
+                        <button
+                          onClick={() => handleCopy(msg.content, index)}
+                          className="p-1 hover:bg-white/10 rounded transition-colors"
+                          title="复制"
+                        >
+                          {copiedIndex === index ? (
+                            <Check className="w-3.5 h-3.5 text-green-400" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
 
-                  <div className={`flex items-center gap-2 mt-2 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <span className="text-xs text-gray-500">{formatTime(msg.timestamp)}</span>
-                    {msg.role === 'assistant' && (
-                      <button
-                        onClick={() => handleCopy(msg.content, index)}
-                        className="p-1 hover:bg-white/10 rounded transition-colors"
-                        title="复制"
-                      >
-                        {copiedIndex === index ? (
-                          <Check className="w-3.5 h-3.5 text-green-400" />
-                        ) : (
-                          <Copy className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
-                        )}
-                      </button>
-                    )}
-                  </div>
+                  {msg.role === 'user' && (
+                    <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
+                      <User className="w-4 h-4 text-gray-300" />
+                    </div>
+                  )}
                 </div>
-
-                {msg.role === 'user' && (
-                  <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
-                    <User className="w-4 h-4 text-gray-300" />
-                  </div>
-                )}
-              </div>
-            ))
+              );
+            })
           )}
 
           {loading && messages.length > 0 && messages[messages.length - 1].role === 'assistant' && (
@@ -379,10 +420,13 @@ export default function Home() {
             </button>
           </div>
           <p className="text-center text-xs text-gray-500 mt-3">
-            AI 生成的内容可能有误，请自行核实
+            AI 生成的内容可能有误，请自行核实 • RAG 功能已启用
           </p>
         </form>
       </div>
+
+      {/* Knowledge Base Sidebar */}
+      <KnowledgeBase />
     </div>
   );
 }
