@@ -42,7 +42,7 @@ interface ChatSidebarProps {
   // UI控制属性
   onToggleSidebar: () => void;                                        // 切换侧边栏显示状态
   isOpen: boolean;                                                     // 侧边栏是否打开
-  sidebarRef: React.RefObject<HTMLDivElement>;                        // 侧边栏DOM引用
+  sidebarRef: React.RefObject<HTMLDivElement | null>;                        // 侧边栏DOM引用
 }
 
 export default function ChatSidebar({

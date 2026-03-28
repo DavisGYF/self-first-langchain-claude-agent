@@ -13,6 +13,7 @@ import ReactMarkdown from "react-markdown";
 import {
   Send, // 发送按钮图标
   Square, // 停止生成图标
+  FileImage, // 图片文件图标
 } from "lucide-react";
 import KnowledgeBase from "@/components/KnowledgeBase"; // 知识库侧边栏组件
 import TypingIndicator from "@/components/TypingIndicator"; // AI 输入中指示器组件
@@ -20,6 +21,7 @@ import ChatSidebar from "@/components/ChatSidebar";         // 左侧对话列�
 import ChatHeader from "@/components/ChatHeader";           // 聊天头部组件
 import WelcomeScreen from "@/components/WelcomeScreen";     // 欢迎界面组件
 import MessageItem from "@/components/MessageItem";         // 消息项组件
+import ImageOCR from "@/components/ImageOCR";               // 图片OCR识别组件
 import { useChatManager } from "@/hooks/useChatManager"; // 对话管理 Hook
 
 // 检索文档接口定义：RAG 检索到的知识库文档结构
@@ -81,6 +83,8 @@ export default function Home() {
   const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]); // RAG 检索到的文档
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // 左侧对话列表展开状态
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true); // 右侧知识库展开状态
+  const [extractedText, setExtractedText] = useState(""); // 从图片中提取的文字
+  const [showOCR, setShowOCR] = useState(false); // 是否显示OCR组件
 
   // 检测是否为移动设备
   const [isMobile, setIsMobile] = useState(false);
@@ -326,6 +330,25 @@ export default function Home() {
     inputRef.current?.focus();
   };
 
+  // ==================== OCR相关函数 ====================
+  const handleOCRComplete = (result: any) => {
+    console.log('OCR识别完成:', result);
+    // 可以在这里添加OCR完成后的额外处理逻辑
+  };
+
+  const handleTextExtracted = (text: string) => {
+    setExtractedText(text);
+    // 将识别的文字添加到输入框中，如果输入框为空的话
+    if (!input.trim()) {
+      setInput(text);
+    } else {
+      // 如果输入框已有内容，将识别的文字追加到后面
+      setInput(prev => prev + '\n\n从图片中识别的文字：\n' + text);
+    }
+    setShowOCR(false);
+    inputRef.current?.focus();
+  };
+
   // ==================== 辅助函数：格式化时间 ====================
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString("zh-CN", {
@@ -445,6 +468,17 @@ export default function Home() {
           {/* 输入区域 */}
           <div className="relative z-20 bg-black/20 backdrop-blur-xl border-t border-white/10 p-4">
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+              {/* OCR组件 */}
+              {showOCR && (
+                <div className="mb-4">
+                  <ImageOCR
+                    onOCRComplete={handleOCRComplete}
+                    onTextExtracted={handleTextExtracted}
+                    language="auto"
+                  />
+                </div>
+              )}
+
               {/* 输入框容器 */}
               <div className="flex gap-2 sm:gap-3 items-center bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
                 <input
@@ -456,6 +490,15 @@ export default function Home() {
                   disabled={loading}
                   className="flex-1 bg-transparent text-white placeholder-gray-500 px-3 sm:px-4 py-2 focus:outline-none disabled:opacity-50 min-w-0"
                 />
+                {/* OCR上传按钮 */}
+                <button
+                  type="button"
+                  onClick={() => setShowOCR(!showOCR)}
+                  className="p-2 sm:p-3 bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/50 rounded-xl transition-all flex-shrink-0"
+                  title="上传图片识别文字"
+                >
+                  <FileImage className="w-4 h-4 sm:w-5 sm:h-5 text-indigo-400" />
+                </button>
                 {/* 发送按钮 */}
                 <button
                   type="submit"
@@ -480,6 +523,7 @@ export default function Home() {
               <p className="text-center text-xs text-gray-500 mt-3">
                 AI 生成的内容可能有误，请自行核实 •{" "}
                 {useRag ? "🧠 RAG 知识库已启用" : "💬 普通对话模式"}
+                {extractedText && " • 📷 已识别图片文字"}
               </p>
             </form>
           </div>
