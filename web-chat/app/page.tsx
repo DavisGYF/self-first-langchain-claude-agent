@@ -12,24 +12,14 @@ import ReactMarkdown from "react-markdown";
 // 从 lucide-react 图标库导入各种 UI 图标
 import {
   Send, // 发送按钮图标
-  Plus, // 新建对话图标
-  Copy, // 复制内容图标
-  Check, // 复制成功勾选图标
-  Download, // 导出下载图标
-  Sparkles, // 闪光/推荐图标
-  Bot, // 机器人/AI 图标
-  User, // 用户头像图标
-  Database, // 数据库/知识库图标
-  BrainCircuit, // 大脑/神经网络图标（用于 RAG 开关）
   Square, // 停止生成图标
-  Trash2, // 删除图标
-  Edit2, // 编辑图标
-  MessageSquare, // 消息图标
-  X, // 关闭图标
-  Menu, // 菜单图标
 } from "lucide-react";
 import KnowledgeBase from "@/components/KnowledgeBase"; // 知识库侧边栏组件
 import TypingIndicator from "@/components/TypingIndicator"; // AI 输入中指示器组件
+import ChatSidebar from "@/components/ChatSidebar";         // 左侧对话列表组件
+import ChatHeader from "@/components/ChatHeader";           // 聊天头部组件
+import WelcomeScreen from "@/components/WelcomeScreen";     // 欢迎界面组件
+import MessageItem from "@/components/MessageItem";         // 消息项组件
 import { useChatManager } from "@/hooks/useChatManager"; // 对话管理 Hook
 
 // 检索文档接口定义：RAG 检索到的知识库文档结构
@@ -380,225 +370,44 @@ export default function Home() {
       {/* 主体内容区域：左右边栏 + 中间聊天区 */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* 左侧边栏：对话列表 */}
-        <aside
-          ref={leftSidebarRef}
-          className={`fixed lg:static inset-y-0 left-0 w-72 bg-black/60 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-            leftSidebarOpen
-              ? "translate-x-0"
-              : "-translate-x-full lg:translate-x-0"
-          } ${leftSidebarOpen ? "lg:w-72" : "lg:w-0 lg:overflow-hidden"}`}
-        >
-          {/* 侧边栏头部 */}
-          <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
-            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-indigo-400" />
-              对话列表
-            </h2>
-            <button
-              onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-              className="p-1 hover:bg-white/10 rounded transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          </div>
-
-          {/* 对话列表 */}
-          <div className="flex-1 overflow-y-auto px-2 space-y-1 min-h-0">
-            {sessions.length === 0 ? (
-              <div className="text-center text-gray-500 py-8">暂无对话</div>
-            ) : (
-              sessions.map((chat) => (
-                <div
-                  key={chat.id}
-                  className={`group relative rounded-lg transition-all ${
-                    chat.id === currentChatId
-                      ? "bg-white/10 border border-indigo-500/50"
-                      : "hover:bg-white/5 border border-transparent"
-                  }`}
-                >
-                  <div
-                    onClick={() => switchToChat(chat.id)}
-                    className="p-3 cursor-pointer"
-                  >
-                    {editingChatId === chat.id ? (
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        onBlur={saveChatName}
-                        onKeyDown={handleEditKeyDown}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full bg-black/50 text-white text-sm px-2 py-1 rounded border border-indigo-500 focus:outline-none"
-                        autoFocus
-                      />
-                    ) : (
-                      <>
-                        <div className="flex items-start gap-2">
-                          <MessageSquare className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate">
-                              {chat.name}
-                            </p>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {chat.messages.length} 条消息 ·{" "}
-                              {formatDate(chat.updatedAt)}
-                            </p>
-                          </div>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {editingChatId !== chat.id && (
-                    <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEditing(chat.id, chat.name);
-                        }}
-                        className="p-1 hover:bg-white/20 rounded transition-colors"
-                        title="重命名"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 text-gray-400" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          deleteChat(chat.id);
-                        }}
-                        className="p-1 hover:bg-red-500/20 rounded transition-colors"
-                        title="删除"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {/* 侧边栏底部 */}
-          <div className="p-4 border-t border-white/10 bg-black/20 flex-shrink-0">
-            <button
-              onClick={handleNewChat}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all font-medium"
-            >
-              <Plus className="w-5 h-5" />
-              新建对话
-            </button>
-            <p className="text-xs text-gray-500 text-center mt-2">
-              共 {sessions.length} 个对话 · 本地存储
-            </p>
-          </div>
-        </aside>
+        <ChatSidebar
+          sessions={sessions}
+          currentChatId={currentChatId}
+          editingChatId={editingChatId}
+          editName={editName}
+          onChatSelect={switchToChat}
+          onNewChat={handleNewChat}
+          onStartEditing={startEditing}
+          onSaveName={saveChatName}
+          onCancelEditing={cancelEditing}
+          onEditNameChange={setEditName}
+          onDeleteChat={deleteChat}
+          onToggleSidebar={() => setLeftSidebarOpen(!leftSidebarOpen)}
+          isOpen={leftSidebarOpen}
+          sidebarRef={leftSidebarRef}
+        />
 
         {/* 中间内容区域 */}
         <div className="flex-1 flex flex-col min-w-0 mx-4 sm:mx-8 lg:mx-0">
           {/* 头部区域 */}
-          <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-            {/* 左侧菜单按钮 */}
-            <button
-              onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <Menu className="w-5 h-5 text-gray-400" />
-            </button>
-
-            {/* Logo 和标题 */}
-            <div className="flex items-center gap-3 flex-1">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center hidden sm:flex">
-                <Sparkles className="w-4 h-4 text-white" />
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-base font-bold text-white truncate">
-                  AI 智能助手
-                </h1>
-                <p className="text-xs text-gray-400 hidden sm:block">
-                  基于 DeepSeek LLM
-                </p>
-              </div>
-            </div>
-
-            {/* 右侧功能按钮 */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {/* RAG 开关 */}
-              <button
-                onClick={handleToggleRag}
-                className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 rounded-lg transition-colors text-xs sm:text-sm ${
-                  useRag
-                    ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/50"
-                    : "bg-white/5 text-gray-400 border border-white/10"
-                }`}
-                title={useRag ? "RAG 已启用" : "RAG 已禁用"}
-              >
-                <BrainCircuit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden xs:inline">
-                  {useRag ? "RAG ON" : "RAG OFF"}
-                </span>
-              </button>
-
-              {/* 导出按钮 */}
-              <button
-                onClick={handleExport}
-                disabled={currentMessages.length === 0}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
-                title="导出聊天记录"
-              >
-                <Download className="w-4 h-4 text-gray-400 group-hover:text-white" />
-              </button>
-
-              {/* 右侧菜单按钮 */}
-              <button
-                onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                title="知识库"
-              >
-                <Database className="w-5 h-5 text-gray-400" />
-              </button>
-            </div>
-          </header>
+          <ChatHeader
+            onToggleLeftSidebar={() => setLeftSidebarOpen(!leftSidebarOpen)}
+            onToggleRightSidebar={() => setRightSidebarOpen(!rightSidebarOpen)}
+            onToggleRag={handleToggleRag}
+            onExport={handleExport}
+            useRag={useRag}
+            currentMessagesLength={currentMessages.length}
+          />
 
           {/* 消息列表区域 */}
           <div className="flex-1 overflow-y-auto">
             <div className="max-w-3xl mx-auto px-4 py-6 space-y-6 min-h-full">
               {/* 条件渲染：无消息时显示欢迎界面 */}
               {currentMessages.length === 0 ? (
-                <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
-                  {/* AI 头像图标 */}
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/30">
-                    <Bot className="w-10 h-10 text-white" />
-                  </div>
-                  {/* 欢迎标题 */}
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    你好，我是你的 AI 助手
-                  </h2>
-                  {/* 欢迎描述 */}
-                  <p className="text-gray-400 mb-8 text-center max-w-md">
-                    我可以帮你解答问题、编写代码、创作内容等。随时问我任何问题！
-                  </p>
-
-                  {/* 预设问题列表 */}
-                  <div className="w-full max-w-lg">
-                    <p className="text-sm text-gray-500 mb-4 text-center">
-                      试试这些问题
-                    </p>
-                    <div className="grid gap-3">
-                      {PRESET_QUESTIONS.map((question, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handlePresetQuestion(question)}
-                          className="w-full text-left p-4 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-indigo-500/50 rounded-xl transition-all group"
-                        >
-                          <span className="text-gray-300 group-hover:text-white">
-                            {question}
-                          </span>
-                          <Sparkles className="w-4 h-4 text-indigo-400 ml-2 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <WelcomeScreen
+                  presetQuestions={PRESET_QUESTIONS}
+                  onQuestionClick={handlePresetQuestion}
+                />
               ) : (
                 /* 有条件渲染：有消息时遍历显示 */
                 currentMessages.map((msg, index) => {
@@ -611,93 +420,16 @@ export default function Home() {
                     retrievedDocs.some((doc) => doc.source && doc.content);
 
                   return (
-                    // 消息容器：用户消息右对齐，AI 消息左对齐
-                    <div
+                    <MessageItem
                       key={index}
-                      className={`flex gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
-                    >
-                      {/* AI 头像：仅 AI 消息显示 */}
-                      {msg.role === "assistant" && (
-                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
-                          <Bot className="w-4 h-4 text-white" />
-                        </div>
-                      )}
-
-                      {/* 消息内容容器 */}
-                      <div
-                        className={`max-w-[80%] ${msg.role === "user" ? "items-end" : "items-start"}`}
-                      >
-                        {/* 消息气泡：用户和 AI 不同样式 */}
-                        <div
-                          className={`rounded-2xl px-5 py-3 ${
-                            msg.role === "user"
-                              ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white"
-                              : "bg-white/10 backdrop-blur-sm text-gray-100 border border-white/10"
-                          }`}
-                        >
-                          {msg.role === "user" ? (
-                            <p className="whitespace-pre-wrap">{msg.content}</p>
-                          ) : (
-                            <div className="prose prose-invert max-w-none text-sm">
-                              <ReactMarkdown>{msg.content}</ReactMarkdown>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* RAG 来源展示 */}
-                        {hasSources && (
-                          <div className="mt-2 p-3 bg-indigo-900/30 backdrop-blur-sm rounded-xl border border-indigo-500/30">
-                            <div className="flex items-center gap-2 mb-2">
-                              <Database className="w-4 h-4 text-indigo-400" />
-                              <span className="text-xs font-semibold text-indigo-300">
-                                知识库引用
-                              </span>
-                            </div>
-                            <div className="space-y-1">
-                              {retrievedDocs.map((doc, i) => (
-                                <div key={i} className="text-xs">
-                                  <span className="text-indigo-400">
-                                    {doc.source}
-                                  </span>
-                                  <p className="text-gray-400 mt-0.5 line-clamp-2">
-                                    {doc.content}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* 消息元信息：时间和复制按钮 */}
-                        <div
-                          className={`flex items-center gap-2 mt-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                        >
-                          <span className="text-xs text-gray-500">
-                            {formatTime(msg.timestamp)}
-                          </span>
-                          {msg.role === "assistant" && (
-                            <button
-                              onClick={() => handleCopy(msg.content, index)}
-                              className="p-1 hover:bg-white/10 rounded transition-colors"
-                              title="复制"
-                            >
-                              {copiedIndex === index ? (
-                                <Check className="w-3.5 h-3.5 text-green-400" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* 用户头像：仅用户消息显示 */}
-                      {msg.role === "user" && (
-                        <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
-                          <User className="w-4 h-4 text-gray-300" />
-                        </div>
-                      )}
-                    </div>
+                      message={msg}
+                      index={index}
+                      isLastAssistantMessage={isLastAssistantMsg}
+                      retrievedDocs={retrievedDocs}
+                      copiedIndex={copiedIndex}
+                      onCopy={handleCopy}
+                      formatTime={formatTime}
+                    />
                   );
                 })
               )}
