@@ -11,30 +11,30 @@ import { useState, useRef, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 // 从 lucide-react 图标库导入各种 UI 图标
 import {
-  Send,         // 发送按钮图标
-  Plus,         // 新建对话图标
-  Copy,         // 复制内容图标
-  Check,        // 复制成功勾选图标
-  Download,     // 导出下载图标
-  Sparkles,     // 闪光/推荐图标
-  Bot,          // 机器人/AI 图标
-  User,         // 用户头像图标
-  Database,     // 数据库/知识库图标
+  Send, // 发送按钮图标
+  Plus, // 新建对话图标
+  Copy, // 复制内容图标
+  Check, // 复制成功勾选图标
+  Download, // 导出下载图标
+  Sparkles, // 闪光/推荐图标
+  Bot, // 机器人/AI 图标
+  User, // 用户头像图标
+  Database, // 数据库/知识库图标
   BrainCircuit, // 大脑/神经网络图标（用于 RAG 开关）
-  Square,       // 停止生成图标
-  Trash2,       // 删除图标
-  Edit2,        // 编辑图标
-  MessageSquare,// 消息图标
-  X,            // 关闭图标
-  Menu,         // 菜单图标
+  Square, // 停止生成图标
+  Trash2, // 删除图标
+  Edit2, // 编辑图标
+  MessageSquare, // 消息图标
+  X, // 关闭图标
+  Menu, // 菜单图标
 } from "lucide-react";
-import KnowledgeBase from "@/components/KnowledgeBase";      // 知识库侧边栏组件
-import TypingIndicator from "@/components/TypingIndicator";  // AI 输入中指示器组件
-import { useChatManager, Message, ChatSession } from "@/hooks/useChatManager"; // 对话管理 Hook
+import KnowledgeBase from "@/components/KnowledgeBase"; // 知识库侧边栏组件
+import TypingIndicator from "@/components/TypingIndicator"; // AI 输入中指示器组件
+import { useChatManager } from "@/hooks/useChatManager"; // 对话管理 Hook
 
 // 检索文档接口定义：RAG 检索到的知识库文档结构
 interface RetrievedDoc {
-  source: string;  // 文档来源/文件名
+  source: string; // 文档来源/文件名
   content: string; // 文档内容片段
 }
 
@@ -63,33 +63,33 @@ function formatDate(timestamp: number): string {
 export default function Home() {
   // ==================== 使用对话管理 Hook ====================
   const {
-    sessions,           // 所有对话列表
-    currentChatId,      // 当前对话 ID
-    currentChat,        // 当前对话对象
-    currentMessages,    // 当前对话的消息列表
-    isLoaded,           // 是否已加载完成
+    sessions, // 所有对话列表
+    currentChatId, // 当前对话 ID
+    currentChat, // 当前对话对象
+    currentMessages, // 当前对话的消息列表
+    isLoaded, // 是否已加载完成
 
-    editingChatId,      // 正在编辑的对话 ID
-    editName,           // 编辑中的名称
-    setEditName,        // 设置编辑名称
+    editingChatId, // 正在编辑的对话 ID
+    editName, // 编辑中的名称
+    setEditName, // 设置编辑名称
 
-    createNewChat,      // 创建新对话
-    switchToChat,       // 切换对话
-    updateMessages,     // 更新消息
-    deleteChat,         // 删除对话
-    startEditing,       // 开始编辑名称
-    saveChatName,       // 保存编辑的名称
-    cancelEditing,      // 取消编辑
-    updateChatRag,      // 更新 RAG 设置
-    exportChat,         // 导出对话
+    createNewChat, // 创建新对话
+    switchToChat, // 切换对话
+    updateMessages, // 更新消息
+    deleteChat, // 删除对话
+    startEditing, // 开始编辑名称
+    saveChatName, // 保存编辑的名称
+    cancelEditing, // 取消编辑
+    updateChatRag, // 更新 RAG 设置
+    exportChat, // 导出对话
   } = useChatManager();
 
   // ==================== 本地状态管理 ====================
-  const [input, setInput] = useState("");                    // 用户输入框内容
-  const [loading, setLoading] = useState(false);             // 是否正在等待 AI 响应
+  const [input, setInput] = useState(""); // 用户输入框内容
+  const [loading, setLoading] = useState(false); // 是否正在等待 AI 响应
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null); // 已复制消息的索引
   const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]); // RAG 检索到的文档
-  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);   // 左侧对话列表展开状态
+  const [leftSidebarOpen, setLeftSidebarOpen] = useState(true); // 左侧对话列表展开状态
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true); // 右侧知识库展开状态
 
   // 检测是否为移动设备
@@ -99,8 +99,8 @@ export default function Home() {
       setIsMobile(window.innerWidth < 1024);
     };
     checkIsMobile();
-    window.addEventListener('resize', checkIsMobile);
-    return () => window.removeEventListener('resize', checkIsMobile);
+    window.addEventListener("resize", checkIsMobile);
+    return () => window.removeEventListener("resize", checkIsMobile);
   }, []);
 
   // 初始化侧边栏状态：桌面端默认打开，移动端默认关闭
@@ -118,11 +118,11 @@ export default function Home() {
   const useRag = currentChat?.useRag ?? true;
 
   // ==================== Refs 引用 ====================
-  const messagesEndRef = useRef<HTMLDivElement>(null);       // 指向消息列表底部的引用
+  const messagesEndRef = useRef<HTMLDivElement>(null); // 指向消息列表底部的引用
   const streamControllerRef = useRef<AbortController | null>(null); // 控制 SSE 流中断
-  const inputRef = useRef<HTMLInputElement>(null);           // 输入框 DOM 引用
-  const leftSidebarRef = useRef<HTMLDivElement>(null);       // 左侧边栏引用
-  const rightSidebarRef = useRef<HTMLDivElement>(null);      // 右侧边栏引用
+  const inputRef = useRef<HTMLInputElement>(null); // 输入框 DOM 引用
+  const leftSidebarRef = useRef<HTMLDivElement>(null); // 左侧边栏引用
+  const rightSidebarRef = useRef<HTMLDivElement>(null); // 右侧边栏引用
 
   // 滚动到底部函数：当新消息到达时自动滚动视图
   const scrollToBottom = () => {
@@ -148,17 +148,21 @@ export default function Home() {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as Node;
       // 左侧边栏
-      if (leftSidebarOpen &&
-          window.innerWidth < 1024 &&
-          leftSidebarRef.current &&
-          !leftSidebarRef.current.contains(target)) {
+      if (
+        leftSidebarOpen &&
+        window.innerWidth < 1024 &&
+        leftSidebarRef.current &&
+        !leftSidebarRef.current.contains(target)
+      ) {
         setLeftSidebarOpen(false);
       }
       // 右侧边栏
-      if (rightSidebarOpen &&
-          window.innerWidth < 1024 &&
-          rightSidebarRef.current &&
-          !rightSidebarRef.current.contains(target)) {
+      if (
+        rightSidebarOpen &&
+        window.innerWidth < 1024 &&
+        rightSidebarRef.current &&
+        !rightSidebarRef.current.contains(target)
+      ) {
         setRightSidebarOpen(false);
       }
     };
@@ -264,7 +268,11 @@ export default function Home() {
                 accumulatedContent += parsed.content;
                 const updatedMessages = [
                   ...newMessages,
-                  { role: "assistant" as const, content: accumulatedContent, timestamp: Date.now() },
+                  {
+                    role: "assistant" as const,
+                    content: accumulatedContent,
+                    timestamp: Date.now(),
+                  },
                 ];
                 updateMessages(updatedMessages);
               }
@@ -280,7 +288,11 @@ export default function Home() {
         const errorMessage = `❌ 请求失败：${(error as Error).message}`;
         const updatedMessages = [
           ...newMessages,
-          { role: "assistant" as const, content: errorMessage, timestamp: Date.now() },
+          {
+            role: "assistant" as const,
+            content: errorMessage,
+            timestamp: Date.now(),
+          },
         ];
         updateMessages(updatedMessages);
       }
@@ -367,13 +379,14 @@ export default function Home() {
 
       {/* 主体内容区域：左右边栏 + 中间聊天区 */}
       <div className="flex flex-1 overflow-hidden relative">
-
         {/* 左侧边栏：对话列表 */}
         <aside
           ref={leftSidebarRef}
           className={`fixed lg:static inset-y-0 left-0 w-72 bg-black/60 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-            leftSidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"
-          }`}
+            leftSidebarOpen
+              ? "translate-x-0"
+              : "-translate-x-full lg:translate-x-0"
+          } ${leftSidebarOpen ? "lg:w-72" : "lg:w-0 lg:overflow-hidden"}`}
         >
           {/* 侧边栏头部 */}
           <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
@@ -382,8 +395,8 @@ export default function Home() {
               对话列表
             </h2>
             <button
-              onClick={() => setLeftSidebarOpen(false)}
-              className="lg:hidden p-1 hover:bg-white/10 rounded transition-colors"
+              onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
+              className="p-1 hover:bg-white/10 rounded transition-colors"
             >
               <X className="w-5 h-5 text-gray-400" />
             </button>
@@ -423,9 +436,12 @@ export default function Home() {
                         <div className="flex items-start gap-2">
                           <MessageSquare className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-white truncate">{chat.name}</p>
+                            <p className="text-sm text-white truncate">
+                              {chat.name}
+                            </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              {chat.messages.length} 条消息 · {formatDate(chat.updatedAt)}
+                              {chat.messages.length} 条消息 ·{" "}
+                              {formatDate(chat.updatedAt)}
                             </p>
                           </div>
                         </div>
@@ -479,13 +495,12 @@ export default function Home() {
 
         {/* 中间内容区域 */}
         <div className="flex-1 flex flex-col min-w-0 mx-4 sm:mx-8 lg:mx-0">
-
           {/* 头部区域 */}
           <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-shrink-0">
-            {/* 左侧菜单按钮（移动端） */}
+            {/* 左侧菜单按钮 */}
             <button
               onClick={() => setLeftSidebarOpen(!leftSidebarOpen)}
-              className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
             >
               <Menu className="w-5 h-5 text-gray-400" />
             </button>
@@ -496,8 +511,12 @@ export default function Home() {
                 <Sparkles className="w-4 h-4 text-white" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-base font-bold text-white truncate">AI 智能助手</h1>
-                <p className="text-xs text-gray-400 hidden sm:block">基于 DeepSeek LLM</p>
+                <h1 className="text-base font-bold text-white truncate">
+                  AI 智能助手
+                </h1>
+                <p className="text-xs text-gray-400 hidden sm:block">
+                  基于 DeepSeek LLM
+                </p>
               </div>
             </div>
 
@@ -514,7 +533,9 @@ export default function Home() {
                 title={useRag ? "RAG 已启用" : "RAG 已禁用"}
               >
                 <BrainCircuit className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden xs:inline">{useRag ? "RAG ON" : "RAG OFF"}</span>
+                <span className="hidden xs:inline">
+                  {useRag ? "RAG ON" : "RAG OFF"}
+                </span>
               </button>
 
               {/* 导出按钮 */}
@@ -527,10 +548,10 @@ export default function Home() {
                 <Download className="w-4 h-4 text-gray-400 group-hover:text-white" />
               </button>
 
-              {/* 右侧菜单按钮（移动端） */}
+              {/* 右侧菜单按钮 */}
               <button
                 onClick={() => setRightSidebarOpen(!rightSidebarOpen)}
-                className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                 title="知识库"
               >
                 <Database className="w-5 h-5 text-gray-400" />
@@ -582,7 +603,8 @@ export default function Home() {
                 /* 有条件渲染：有消息时遍历显示 */
                 currentMessages.map((msg, index) => {
                   const isLastAssistantMsg =
-                    msg.role === "assistant" && index === currentMessages.length - 1;
+                    msg.role === "assistant" &&
+                    index === currentMessages.length - 1;
                   const hasSources =
                     isLastAssistantMsg &&
                     retrievedDocs.length > 0 &&
@@ -681,9 +703,7 @@ export default function Home() {
               )}
 
               {/* 加载中指示器 */}
-              {loading && (
-                <TypingIndicator />
-              )}
+              {loading && <TypingIndicator />}
 
               {/* 滚动锚点 */}
               <div ref={messagesEndRef} />
@@ -737,13 +757,15 @@ export default function Home() {
         <aside
           ref={rightSidebarRef}
           className={`fixed lg:static inset-y-0 right-0 w-80 max-w-[70vw] sm:max-w-[50vw] lg:max-w-none bg-black/60 backdrop-blur-xl border-l border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-            rightSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"
-          }`}
+            rightSidebarOpen
+              ? "translate-x-0"
+              : "translate-x-full lg:translate-x-0"
+          } ${rightSidebarOpen ? "lg:w-80" : "lg:w-0 lg:overflow-hidden"}`}
         >
           <KnowledgeBase onClose={() => setRightSidebarOpen(false)} />
         </aside>
 
-        {/* 遮罩层（移动端展开侧边栏时显示） */}
+        {/* 遮罩层（仅移动端展开侧边栏时显示） */}
         {(leftSidebarOpen || rightSidebarOpen) && (
           <div
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"

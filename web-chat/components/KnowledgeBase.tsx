@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Trash2, Database, Check, FileUp, X } from 'lucide-react';
+import { useState, useRef, useEffect } from "react";
+import { Upload, FileText, Trash2, Database, FileUp, X } from "lucide-react";
 
 interface DocumentItem {
   filename: string;
@@ -12,20 +12,20 @@ interface DocumentItem {
 export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
-  const [uploadProgress, setUploadProgress] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState<string>("");
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 加载文档列表
   const fetchDocuments = async () => {
     try {
-      const response = await fetch('/api/knowledge');
+      const response = await fetch("/api/knowledge");
       const data = await response.json();
       if (data.success) {
         setDocuments(data.documents);
       }
     } catch (error) {
-      console.error('获取文档列表失败:', error);
+      console.error("获取文档列表失败:", error);
     }
   };
 
@@ -39,37 +39,37 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
   // 处理文件上传（通用函数）
   const processFileUpload = async (file: File) => {
     setIsUploading(true);
-    setUploadProgress('正在上传...');
+    setUploadProgress("正在上传...");
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append("file", file);
 
     try {
-      const response = await fetch('/api/knowledge/upload', {
-        method: 'POST',
+      const response = await fetch("/api/knowledge/upload", {
+        method: "POST",
         body: formData,
       });
 
       const data = await response.json();
 
       if (data.success) {
-        setUploadProgress('处理中...');
+        setUploadProgress("处理中...");
         await new Promise((resolve) => setTimeout(resolve, 1000));
         await fetchDocuments();
         setUploadProgress(`成功添加 ${data.chunks} 个文本块`);
-        setTimeout(() => setUploadProgress(''), 3000);
+        setTimeout(() => setUploadProgress(""), 3000);
       } else {
         setUploadProgress(`上传失败：${data.error}`);
-        setTimeout(() => setUploadProgress(''), 3000);
+        setTimeout(() => setUploadProgress(""), 3000);
       }
     } catch (error) {
       setUploadProgress(`上传失败：${(error as Error).message}`);
-      setTimeout(() => setUploadProgress(''), 3000);
+      setTimeout(() => setUploadProgress(""), 3000);
     } finally {
       setIsUploading(false);
       setIsDragOver(false);
       if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+        fileInputRef.current.value = "";
       }
     }
   };
@@ -105,9 +105,12 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
     if (!confirm(`确定要删除 "${filename}" 吗？`)) return;
 
     try {
-      const response = await fetch(`/api/knowledge?filename=${encodeURIComponent(filename)}`, {
-        method: 'DELETE',
-      });
+      const response = await fetch(
+        `/api/knowledge?filename=${encodeURIComponent(filename)}`,
+        {
+          method: "DELETE",
+        },
+      );
 
       const data = await response.json();
 
@@ -123,13 +126,13 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
 
   // 格式化时间
   const formatDate = (dateString: string): string => {
-    if (!dateString) return '未知';
+    if (!dateString) return "未知";
     const date = new Date(dateString);
-    return date.toLocaleString('zh-CN', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("zh-CN", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -142,22 +145,26 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
           <h3 className="text-white font-semibold">知识库</h3>
         </div>
         <div className="flex items-center gap-2">
-          <button
+          {/* 使用场景：
+当自动刷新（每30秒）不够及时时
+上传文档后想立即查看结果
+怀疑文档列表不是最新状态时
+如果你希望显示这个按钮，我可以帮你取消注释。不过现在代码已经做了优化，有自动刷新机制和上传后的自动更新，所以这个手动刷新按钮不是必需的。 */}
+          {/* <button
             onClick={fetchDocuments}
             className="p-1 hover:bg-white/10 rounded transition-colors"
             title="刷新"
           >
-            <Check className="w-4 h-4 text-gray-400" />
+            <RotateCcw className="w-4 h-4 text-gray-400" />
+          </button> */}
+
+          <button
+            onClick={onClose}
+            className="p-1 hover:bg-white/10 rounded transition-colors "
+            title="关闭"
+          >
+            <X className="w-5 h-5 text-gray-400" />
           </button>
-          {onClose && (
-            <button
-              onClick={onClose}
-              className="p-1 hover:bg-white/10 rounded transition-colors lg:hidden"
-              title="关闭"
-            >
-              <X className="w-5 h-5 text-gray-400" />
-            </button>
-          )}
         </div>
       </div>
 
@@ -181,10 +188,10 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
             htmlFor="knowledge-upload"
             className={`flex flex-col items-center justify-center p-4 border-2 border-dashed rounded-xl cursor-pointer transition-all ${
               isDragOver
-                ? 'border-indigo-500 bg-indigo-500/10'
+                ? "border-indigo-500 bg-indigo-500/10"
                 : isUploading
-                ? 'border-gray-600 bg-gray-900/50'
-                : 'border-gray-700 hover:border-indigo-500 hover:bg-white/5'
+                  ? "border-gray-600 bg-gray-900/50"
+                  : "border-gray-700 hover:border-indigo-500 hover:bg-white/5"
             }`}
           >
             {isDragOver ? (
@@ -194,17 +201,21 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
             )}
             <span className="text-xs text-gray-400">
               {isDragOver
-                ? '松开上传'
+                ? "松开上传"
                 : isUploading
-                ? '上传中...'
-                : '点击或拖拽上传'}
+                  ? "上传中..."
+                  : "点击或拖拽上传"}
             </span>
-            <span className="text-xs text-gray-600 mt-1">PDF / TXT / MD (最大 10MB)</span>
+            <span className="text-xs text-gray-600 mt-1">
+              PDF / TXT / MD (最大 10MB)
+            </span>
           </label>
         </div>
 
         {uploadProgress && (
-          <p className={`text-xs mt-2 text-center ${uploadProgress.includes('失败') ? 'text-red-400' : 'text-indigo-400'}`}>
+          <p
+            className={`text-xs mt-2 text-center ${uploadProgress.includes("失败") ? "text-red-400" : "text-indigo-400"}`}
+          >
             {uploadProgress}
           </p>
         )}
@@ -216,7 +227,9 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
           <div className="flex flex-col items-center justify-center py-8 px-4 text-center">
             <FileText className="w-12 h-12 text-gray-600 mb-3" />
             <p className="text-sm text-gray-500">暂无文档</p>
-            <p className="text-xs text-gray-600 mt-1">上传文档以启用 RAG 功能</p>
+            <p className="text-xs text-gray-600 mt-1">
+              上传文档以启用 RAG 功能
+            </p>
           </div>
         ) : (
           <div className="space-y-1">
@@ -228,7 +241,9 @@ export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-200 truncate">{doc.filename}</p>
+                    <p className="text-sm text-gray-200 truncate">
+                      {doc.filename}
+                    </p>
                     <p className="text-xs text-gray-500">
                       {doc.chunks} 块 • {formatDate(doc.uploadedAt)}
                     </p>
