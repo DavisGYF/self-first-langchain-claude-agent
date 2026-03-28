@@ -27,7 +27,6 @@ export default function TestOCR() {
             <ImageOCR
               onOCRComplete={handleOCRComplete}
               onTextExtracted={handleTextExtracted}
-              language="auto"
             />
           </div>
 

@@ -1,10 +1,10 @@
 /**
- * OCR文字识别API路由 - 处理图片中的文字识别
+ * 阿里云OCR识别API路由
  *
  * 功能特性：
  * - 接收上传的图片文件
- * - 使用Tesseract.js进行OCR识别
- * - 支持多语言识别
+ * - 调用阿里云OCR服务进行文字识别
+ * - 支持高精度识别
  * - 返回结构化的识别结果
  *
  * API端点：POST /api/ocr/recognize
@@ -13,173 +13,213 @@
  */
 
 import { NextRequest } from 'next/server';
-import Tesseract from 'tesseract.js';
-import fs from 'fs';
-import path from 'path';
-import os from 'os';
+import crypto from 'crypto';
 
 /**
  * OCR识别结果的数据结构
- * 定义API返回的数据格式
  */
 interface OCRResponse {
-  success: boolean;           // 识别是否成功
-  text: string;              // 识别出的完整文本
-  confidence: number;        // 整体置信度 (0-100)
-  blocks: Array<{            // 文字块详细信息
-    text: string;            // 块内文字内容
-    confidence: number;      // 块置信度
-    bbox: {                  // 边界框坐标
-      x: number;             // 左上角X坐标
-      y: number;             // 左上角Y坐标
-      width: number;         // 宽度
-      height: number;        // 高度
+  success: boolean;
+  text: string;
+  confidence: number;
+  blocks: Array<{
+    text: string;
+    confidence: number;
+    bbox: {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
     };
   }>;
-  language: string;          // 使用的识别语言
-  processingTime: number;    // 处理耗时(毫秒)
-  error?: string;            // 错误信息（失败时）
+  language: string;
+  processingTime: number;
+  error?: string;
 }
 
 /**
- * 支持的OCR语言列表
- * 可以根据需要扩展更多语言
+ * 阿里云OCR配置
  */
-const SUPPORTED_LANGUAGES = {
-  auto: 'eng+chi_sim+chi_tra+jpn+kor',     // 自动检测（中英文日韩）
-  eng: 'eng',                              // 英文
-  chi_sim: 'chi_sim',                      // 简体中文
-  chi_tra: 'chi_tra',                      // 繁体中文
-  jpn: 'jpn',                              // 日文
-  kor: 'kor',                              // 韩文
-  eng_chi: 'eng+chi_sim',                  // 英文+简体中文
+const ALIYUN_CONFIG = {
+  accessKeyId: process.env.ALIYUN_ACCESS_KEY_ID || '',
+  accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
+  endpoint: 'https://ocr.cn-shanghai.aliyuncs.com',
+  apiVersion: '2019-12-30',
+  action: 'RecognizeGeneral'
 };
 
 /**
+ * 生成阿里云API签名
+ * 参考阿里云签名算法v1.0
+ */
+function generateSignature(params: Record<string, string>, secret: string): string {
+  // 1. 按参数名称排序
+  const sortedKeys = Object.keys(params).sort();
+
+  // 2. 构造规范化查询字符串
+  const canonicalizedQueryString = sortedKeys
+    .map(key => {
+      const encodedKey = encodeURIComponent(key);
+      const encodedValue = encodeURIComponent(params[key]);
+      return `${encodedKey}=${encodedValue}`;
+    })
+    .join('&');
+
+  // 3. 构造待签名的字符串
+  const stringToSign = `POST&${encodeURIComponent('/')}&${encodeURIComponent(canonicalizedQueryString)}`;
+
+  // 4. 计算HMAC-SHA1签名
+  const hmac = crypto.createHmac('sha1', `${secret}&`);
+  hmac.update(stringToSign);
+  const signature = hmac.digest('base64');
+
+  return encodeURIComponent(signature);
+}
+
+/**
  * 保存上传文件到临时目录
- * 将上传的图片文件保存到服务器临时目录供OCR处理
- *
- * @param file - 上传的文件对象
- * @returns Promise解析为临时文件路径
  */
 async function saveUploadedFile(file: File): Promise<string> {
-  // 创建临时文件名（使用时间戳确保唯一性）
   const timestamp = Date.now();
   const extension = file.name.split('.').pop() || 'jpg';
   const tempFileName = `ocr_${timestamp}.${extension}`;
 
-  // 临时文件保存路径（使用系统临时目录）
-  const tempDir = os.tmpdir();
-  const tempFilePath = path.join(tempDir, tempFileName);
+  // 使用项目临时目录
+  const tempDir = '/tmp';
+  const tempFilePath = `${tempDir}/${tempFileName}`;
 
   try {
-    // 将文件内容读取为ArrayBuffer
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-
-    // 写入到临时文件
-    await fs.promises.writeFile(tempFilePath, buffer);
+    require('fs').promises.writeFile(tempFilePath, buffer);
 
     return tempFilePath;
   } catch (error) {
-    // 如果保存失败，清理临时文件并抛出错误
-    if (fs.existsSync(tempFilePath)) {
-      await fs.promises.unlink(tempFilePath);
-    }
     throw new Error(`文件保存失败：${error}`);
   }
 }
 
 /**
- * 执行OCR文字识别
- * 使用Tesseract.js对图片进行文字识别
- *
- * @param imagePath - 图片文件路径
- * @param language - 识别语言代码
- * @returns Promise解析为OCR识别结果
+ * 调用阿里云OCR API
  */
-async function performOCR(imagePath: string, language: string): Promise<OCRResponse> {
-  const startTime = Date.now(); // 记录开始时间
+async function callAliyunOCR(imagePath: string): Promise<OCRResponse> {
+  const startTime = Date.now();
 
   try {
-    // 根据语言参数选择识别语言
-    const langCode = SUPPORTED_LANGUAGES[language as keyof typeof SUPPORTED_LANGUAGES] || SUPPORTED_LANGUAGES.auto;
-
-    console.log(`🔍 开始OCR识别: ${imagePath}, 语言: ${langCode}`);
-
-    // 使用Tesseract.recognize进行OCR识别 (v7 API)
-    const result = await Tesseract.recognize(imagePath, langCode, {
-      logger: (m) => console.log(`📝 OCR进度:`, m)
-    });
-
-    console.log(`✅ OCR识别完成，文本长度: ${result.data.text?.length || 0}`);
-
-    // 计算处理耗时
-    const processingTime = Date.now() - startTime;
-
-    // 处理识别结果 - 简化处理逻辑
-    let processedBlocks: any[] = [];
-    let confidence = 0;
-    let recognizedText = '';
-
-    // 检查Tesseract.js v7的数据结构
-    if (result && result.data) {
-      recognizedText = result.data.text || '';
-      confidence = typeof result.data.confidence === 'number' ? result.data.confidence : 90;
-
-      // 尝试获取words数据（如果存在）
-      if (result.data && Array.isArray((result.data as any).words)) {
-        processedBlocks = (result.data as any).words.map((word: any) => ({
-          text: word.text || '',
-          confidence: word.confidence || confidence,
-          bbox: word.bbox || { x: 0, y: 0, width: 0, height: 0 },
-        }));
-      } else {
-        // 创建单个文本块
-        processedBlocks = [{
-          text: recognizedText,
-          confidence: confidence,
-          bbox: { x: 0, y: 0, width: 0, height: 0 },
-        }];
-      }
+    // 检查配置
+    if (!ALIYUN_CONFIG.accessKeyId || !ALIYUN_CONFIG.accessKeySecret) {
+      throw new Error('阿里云OCR配置不完整，请检查环境变量');
     }
 
-    // 构建完整的OCR响应
-    const ocrResponse: OCRResponse = {
-      success: true,
-      text: recognizedText.trim(),
-      confidence,
-      blocks: processedBlocks,
-      language: langCode,
-      processingTime,
+    // 读取图片文件
+    const fs = require('fs');
+    const imageBuffer = await fs.promises.readFile(imagePath);
+    const imageBase64 = imageBuffer.toString('base64');
+
+    // 构造请求参数
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const nonce = Math.random().toString(36).substring(2);
+
+    const requestParams: Record<string, string> = {
+      AccessKeyId: ALIYUN_CONFIG.accessKeyId,
+      Action: ALIYUN_CONFIG.action,
+      Version: ALIYUN_CONFIG.apiVersion,
+      Format: 'JSON',
+      SignatureMethod: 'HMAC-SHA1',
+      SignatureVersion: '1.0',
+      SignatureNonce: nonce,
+      Timestamp: timestamp,
+      RegionId: 'cn-shanghai',
+      ImageURL: '', // 这里需要传图片URL，我们改用ImageContent
+      ImageContent: imageBase64,
+      Scene: 'general'
     };
 
-    return ocrResponse;
+    // 生成签名
+    const signature = generateSignature(requestParams, ALIYUN_CONFIG.accessKeySecret);
+    requestParams.Signature = signature;
+
+    console.log('🔍 调用阿里云OCR API...');
+
+    // 发送请求
+    const response = await fetch(ALIYUN_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: Object.keys(requestParams)
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(requestParams[key])}`)
+        .join('&')
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(`阿里云API调用失败: ${JSON.stringify(result)}`);
+    }
+
+    // 处理阿里云OCR响应
+    const processingTime = Date.now() - startTime;
+
+    if (result.Data && result.Data.ocrResult && result.Data.ocrResult.elements) {
+      const elements = result.Data.ocrResult.elements;
+      let allText = '';
+      const blocks: Array<{
+        text: string;
+        confidence: number;
+        bbox: { x: number; y: number; width: number; height: number };
+      }> = [];
+
+      elements.forEach((element: any) => {
+        const text = element.text || '';
+        const confidence = parseFloat(element.score || '90');
+        const bbox = element.boundary || { left: 0, top: 0, width: 0, height: 0 };
+
+        if (text) {
+          allText += text + '\n';
+          blocks.push({
+            text,
+            confidence,
+            bbox: {
+              x: bbox.left || 0,
+              y: bbox.top || 0,
+              width: bbox.width || 0,
+              height: bbox.height || 0
+            }
+          });
+        }
+      });
+
+      return {
+        success: true,
+        text: allText.trim(),
+        confidence: blocks.length > 0 ? blocks.reduce((sum, b) => sum + b.confidence, 0) / blocks.length : 90,
+        blocks,
+        language: 'auto',
+        processingTime
+      };
+    } else {
+      throw new Error('阿里云OCR返回数据格式异常');
+    }
 
   } catch (error) {
-    // 捕获OCR处理错误
-    throw new Error(`OCR识别失败：${error}`);
+    console.error('阿里云OCR调用失败:', error);
+    throw new Error(`OCR识别失败：${error instanceof Error ? error.message : '未知错误'}`);
   }
 }
 
 /**
  * POST请求处理函数
- * 主要的API入口点，处理OCR识别请求
- *
- * @param request - Next.js请求对象
- * @returns NextResponse包含OCR识别结果
  */
 export async function POST(request: NextRequest) {
   let tempFilePath: string | null = null;
 
-  // 添加CORS头部
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  // 处理OPTIONS预检请求
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
@@ -188,12 +228,9 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    // 解析请求数据
     const formData = await request.formData();
     const imageFile = formData.get('image') as File;
-    const language = formData.get('language') as string || 'auto';
 
-    // 验证文件是否存在
     if (!imageFile) {
       return new Response(
         JSON.stringify({
@@ -246,20 +283,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 保存上传的文件到临时目录
+    // 保存文件
     tempFilePath = await saveUploadedFile(imageFile);
 
-    // 执行OCR识别（带超时控制）
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('OCR处理超时，请重试')), 30000); // 30秒超时
-    });
+    // 调用阿里云OCR
+    const ocrResult = await callAliyunOCR(tempFilePath);
 
-    const ocrResult = await Promise.race([
-      performOCR(tempFilePath, language),
-      timeoutPromise
-    ]);
-
-    // 返回成功的响应
     return new Response(JSON.stringify(ocrResult), {
       status: 200,
       headers: {
@@ -269,7 +298,6 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    // 处理所有可能的错误
     console.error('OCR API错误:', error);
 
     return new Response(
@@ -292,9 +320,12 @@ export async function POST(request: NextRequest) {
     );
   } finally {
     // 清理临时文件
-    if (tempFilePath && fs.existsSync(tempFilePath)) {
+    if (tempFilePath) {
       try {
-        await fs.promises.unlink(tempFilePath);
+        const fs = require('fs');
+        if (fs.existsSync(tempFilePath)) {
+          await fs.promises.unlink(tempFilePath);
+        }
       } catch (unlinkError) {
         console.error('临时文件清理失败:', unlinkError);
       }

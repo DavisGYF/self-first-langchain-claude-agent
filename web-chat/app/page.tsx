@@ -474,7 +474,6 @@ export default function Home() {
                   <ImageOCR
                     onOCRComplete={handleOCRComplete}
                     onTextExtracted={handleTextExtracted}
-                    language="auto"
                   />
                 </div>
               )}
