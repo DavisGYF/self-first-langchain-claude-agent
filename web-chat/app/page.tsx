@@ -694,7 +694,7 @@ export default function Home() {
           <div className="relative z-20 bg-black/20 backdrop-blur-xl border-t border-white/10 p-4">
             <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
               {/* 输入框容器 */}
-              <div className="flex gap-3 items-center bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+              <div className="flex gap-2 sm:gap-3 items-center bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
                 <input
                   ref={inputRef}
                   type="text"
@@ -702,25 +702,25 @@ export default function Home() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="输入你的问题... (Enter 发送，Shift+Enter 换行)"
                   disabled={loading}
-                  className="flex-1 bg-transparent text-white placeholder-gray-500 px-4 py-2 focus:outline-none disabled:opacity-50"
+                  className="flex-1 bg-transparent text-white placeholder-gray-500 px-3 sm:px-4 py-2 focus:outline-none disabled:opacity-50 min-w-0"
                 />
                 {/* 发送按钮 */}
                 <button
                   type="submit"
                   disabled={loading || !input.trim()}
-                  className="p-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all disabled:grayscale"
+                  className="p-2 sm:p-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl transition-all disabled:grayscale flex-shrink-0"
                 >
-                  <Send className="w-5 h-5 text-white" />
+                  <Send className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                 </button>
                 {/* 停止生成按钮 */}
                 {loading && (
                   <button
                     type="button"
                     onClick={handleStopGeneration}
-                    className="p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-xl transition-all"
+                    className="p-2 sm:p-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-xl transition-all flex-shrink-0"
                     title="停止生成"
                   >
-                    <Square className="w-5 h-5 text-red-400" />
+                    <Square className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
                   </button>
                 )}
               </div>
