@@ -92,6 +92,28 @@ export default function Home() {
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);   // 左侧对话列表展开状态
   const [rightSidebarOpen, setRightSidebarOpen] = useState(true); // 右侧知识库展开状态
 
+  // 检测是否为移动设备
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const checkIsMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    checkIsMobile();
+    window.addEventListener('resize', checkIsMobile);
+    return () => window.removeEventListener('resize', checkIsMobile);
+  }, []);
+
+  // 初始化侧边栏状态：桌面端默认打开，移动端默认关闭
+  useEffect(() => {
+    if (isMobile) {
+      setLeftSidebarOpen(false);
+      setRightSidebarOpen(false);
+    } else {
+      setLeftSidebarOpen(true);
+      setRightSidebarOpen(true);
+    }
+  }, [isMobile]);
+
   // 从当前对话获取 RAG 设置
   const useRag = currentChat?.useRag ?? true;
 
@@ -456,7 +478,7 @@ export default function Home() {
         </aside>
 
         {/* 中间内容区域 */}
-        <div className="flex-1 flex flex-col min-w-0 mx-16 lg:mx-0">
+        <div className="flex-1 flex flex-col min-w-0 mx-4 sm:mx-8 lg:mx-0">
 
           {/* 头部区域 */}
           <header className="bg-black/20 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center gap-3 flex-shrink-0">
@@ -714,11 +736,11 @@ export default function Home() {
         {/* 右侧边栏：知识库 */}
         <aside
           ref={rightSidebarRef}
-          className={`fixed lg:static inset-y-0 right-0 w-80 bg-black/60 backdrop-blur-xl border-l border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
+          className={`fixed lg:static inset-y-0 right-0 w-80 max-w-[70vw] sm:max-w-[50vw] lg:max-w-none bg-black/60 backdrop-blur-xl border-l border-white/10 z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
             rightSidebarOpen ? "translate-x-0" : "translate-x-full lg:translate-x-0 lg:w-0 lg:overflow-hidden"
           }`}
         >
-          <KnowledgeBase />
+          <KnowledgeBase onClose={() => setRightSidebarOpen(false)} />
         </aside>
 
         {/* 遮罩层（移动端展开侧边栏时显示） */}

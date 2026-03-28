@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Trash2, Database, Check, FileUp } from 'lucide-react';
+import { Upload, FileText, Trash2, Database, Check, FileUp, X } from 'lucide-react';
 
 interface DocumentItem {
   filename: string;
