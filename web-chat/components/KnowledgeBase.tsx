@@ -9,7 +9,7 @@ interface DocumentItem {
   uploadedAt: string;
 }
 
-export default function KnowledgeBase() {
+export default function KnowledgeBase({ onClose }: { onClose?: () => void }) {
   const [isUploading, setIsUploading] = useState(false);
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [uploadProgress, setUploadProgress] = useState<string>('');
@@ -134,20 +134,31 @@ export default function KnowledgeBase() {
   };
 
   return (
-    <div className="fixed right-0 top-20 w-80 bg-black/40 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-0">
+    <div className="w-full h-full bg-black/40 backdrop-blur-xl border-l border-white/10 flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-white/10">
+      <div className="flex items-center justify-between p-4 border-b border-white/10 flex-shrink-0">
         <div className="flex items-center gap-2">
           <Database className="w-5 h-5 text-indigo-400" />
           <h3 className="text-white font-semibold">知识库</h3>
         </div>
-        <button
-          onClick={fetchDocuments}
-          className="p-1 hover:bg-white/10 rounded transition-colors"
-          title="刷新"
-        >
-          <Check className="w-4 h-4 text-gray-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={fetchDocuments}
+            className="p-1 hover:bg-white/10 rounded transition-colors"
+            title="刷新"
+          >
+            <Check className="w-4 h-4 text-gray-400" />
+          </button>
+          {onClose && (
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-white/10 rounded transition-colors lg:hidden"
+              title="关闭"
+            >
+              <X className="w-5 h-5 text-gray-400" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Upload Area */}
