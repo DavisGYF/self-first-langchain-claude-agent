@@ -1,34 +1,44 @@
+// "use client" 指令：标记此文件为客户端组件，必须在浏览器端运行
+// 原因：使用了 React hooks (useState, useRef 等) 和浏览器 API (clipboard, DOM 引用)
 "use client";
 
+// 导入 React 核心 hooks
+// useState: 管理组件状态
+// useRef: 创建可变引用，不触发重新渲染
+// useEffect: 处理副作用（如事件监听、清理函数）
 import { useState, useRef, useEffect } from "react";
+// 导入 ReactMarkdown 组件：用于将 Markdown 格式文本渲染为 HTML
 import ReactMarkdown from "react-markdown";
+// 从 lucide-react 图标库导入各种 UI 图标
 import {
-  Send,
-  Plus,
-  Copy,
-  Check,
-  Download,
-  Sparkles,
-  Bot,
-  User,
-  Database,
-  BrainCircuit,
-  Square,
+  Send,         // 发送按钮图标
+  Plus,         // 新建对话图标
+  Copy,         // 复制内容图标
+  Check,        // 复制成功勾选图标
+  Download,     // 导出下载图标
+  Sparkles,     // 闪光/推荐图标
+  Bot,          // 机器人/AI 图标
+  User,         // 用户头像图标
+  Database,     // 数据库/知识库图标
+  BrainCircuit, // 大脑/神经网络图标（用于 RAG 开关）
+  Square,       // 停止生成图标
+  Trash2,       // 删除图标
+  Edit2,        // 编辑图标
+  MessageSquare,// 消息图标
+  X,            // 关闭图标
+  Menu,         // 菜单图标
 } from "lucide-react";
-import KnowledgeBase from "@/components/KnowledgeBase";
-import TypingIndicator from "@/components/TypingIndicator";
+import KnowledgeBase from "@/components/KnowledgeBase";      // 知识库侧边栏组件
+import TypingIndicator from "@/components/TypingIndicator";  // AI 输入中指示器组件
+import { useChatManager, Message, ChatSession } from "@/hooks/useChatManager"; // 对话管理 Hook
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: number;
-}
-
+// 检索文档接口定义：RAG 检索到的知识库文档结构
 interface RetrievedDoc {
-  source: string;
-  content: string;
+  source: string;  // 文档来源/文件名
+  content: string; // 文档内容片段
 }
 
+// 预设问题数组：首页展示的推荐问题
 const PRESET_QUESTIONS = [
   "RAG 功能是如何工作的？",
   "如何上传文档到知识库？",
@@ -36,26 +46,71 @@ const PRESET_QUESTIONS = [
   "React Hooks 的原理是什么？",
 ];
 
-export default function Home() {
-  const [input, setInput] = useState("");
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]);
-  const [showRagSources, setShowRagSources] = useState<number | null>(null);
-  const [useRag, setUseRag] = useState(true); // RAG 开关
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const streamControllerRef = useRef<AbortController | null>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+// 格式化日期显示
+function formatDate(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
+  if (days === 0) return "今天";
+  if (days === 1) return "昨天";
+  if (days < 7) return `${days}天前`;
+  return date.toLocaleDateString("zh-CN");
+}
+
+// 主页面组件（默认导出）
+export default function Home() {
+  // ==================== 使用对话管理 Hook ====================
+  const {
+    sessions,           // 所有对话列表
+    currentChatId,      // 当前对话 ID
+    currentChat,        // 当前对话对象
+    currentMessages,    // 当前对话的消息列表
+    isLoaded,           // 是否已加载完成
+
+    editingChatId,      // 正在编辑的对话 ID
+    editName,           // 编辑中的名称
+    setEditName,        // 设置编辑名称
+
+    createNewChat,      // 创建新对话
+    switchToChat,       // 切换对话
+    updateMessages,     // 更新消息
+    deleteChat,         // 删除对话
+    startEditing,       // 开始编辑名称
+    saveChatName,       // 保存编辑的名称
+    cancelEditing,      // 取消编辑
+    updateChatRag,      // 更新 RAG 设置
+    exportChat,         // 导出对话
+  } = useChatManager();
+
+  // ==================== 本地状态管理 ====================
+  const [input, setInput] = useState("");                    // 用户输入框内容
+  const [loading, setLoading] = useState(false);             // 是否正在等待 AI 响应
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null); // 已复制消息的索引
+  const [retrievedDocs, setRetrievedDocs] = useState<RetrievedDoc[]>([]); // RAG 检索到的文档
+  const [sidebarOpen, setSidebarOpen] = useState(false);     // 左侧对话列表是否展开（移动端）
+
+  // 从当前对话获取 RAG 设置
+  const useRag = currentChat?.useRag ?? true;
+
+  // ==================== Refs 引用 ====================
+  const messagesEndRef = useRef<HTMLDivElement>(null);       // 指向消息列表底部的引用
+  const streamControllerRef = useRef<AbortController | null>(null); // 控制 SSE 流中断
+  const inputRef = useRef<HTMLInputElement>(null);           // 输入框 DOM 引用
+  const sidebarRef = useRef<HTMLDivElement>(null);           // 侧边栏引用（点击外部关闭）
+
+  // 滚动到底部函数：当新消息到达时自动滚动视图
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
+  // 监听消息变化，自动滚动到底部
   useEffect(() => {
     scrollToBottom();
-  }, [messages]);
+  }, [currentMessages]); // 依赖 currentMessages
 
+  // 组件卸载时清理：中断任何进行中的 SSE 流连接
   useEffect(() => {
     return () => {
       if (streamControllerRef.current) {
@@ -64,7 +119,18 @@ export default function Home() {
     };
   }, []);
 
-  // 快捷键支持
+  // 点击侧边栏外部关闭（移动端）
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (sidebarOpen && sidebarRef.current && !sidebarRef.current.contains(e.target as Node)) {
+        setSidebarOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [sidebarOpen]);
+
+  // 键盘快捷键处理：Enter 发送消息
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -83,9 +149,10 @@ export default function Home() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [input, loading]);
 
+  // ==================== 核心函数：提交消息处理 ====================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || loading) return;
+    if (!input.trim() || loading || !currentChatId) return;
 
     if (streamControllerRef.current) {
       streamControllerRef.current.abort();
@@ -95,20 +162,14 @@ export default function Home() {
     const timestamp = Date.now();
     setInput("");
 
+    // 构建新消息数组（添加用户消息）
     const newMessages = [
-      ...messages,
+      ...currentMessages,
       { role: "user" as const, content: userMessage, timestamp },
     ];
-    setMessages(newMessages);
+
     setLoading(true);
-
     streamControllerRef.current = new AbortController();
-
-    const messagesWithPlaceholder = [
-      ...newMessages,
-      { role: "assistant" as const, content: "", timestamp: Date.now() },
-    ];
-    setMessages(messagesWithPlaceholder);
 
     // 清空之前的检索结果
     setRetrievedDocs([]);
@@ -155,11 +216,9 @@ export default function Home() {
 
               // 处理检索到的文档元数据
               if (parsed.metadata && !docsReceived) {
-                // 只有当真正使用了 RAG 时才设置检索到的文档
                 if (parsed.metadata.usedRag === true) {
                   setRetrievedDocs(parsed.metadata.retrievedDocs || []);
                 } else {
-                  // 如果没有使用 RAG，确保清空检索结果
                   setRetrievedDocs([]);
                 }
                 docsReceived = true;
@@ -167,17 +226,14 @@ export default function Home() {
 
               if (parsed.content) {
                 accumulatedContent += parsed.content;
-                setMessages((prev) => {
-                  const newMsgs = [...prev];
-                  newMsgs[newMsgs.length - 1] = {
-                    ...newMsgs[newMsgs.length - 1],
-                    content: accumulatedContent,
-                  };
-                  return newMsgs;
-                });
+                const updatedMessages = [
+                  ...newMessages,
+                  { role: "assistant" as const, content: accumulatedContent, timestamp: Date.now() },
+                ];
+                updateMessages(updatedMessages);
               }
             } catch (e) {
-              // ignore parse errors
+              // 忽略解析错误
             }
           }
         }
@@ -185,23 +241,12 @@ export default function Home() {
     } catch (error) {
       if ((error as Error).name !== "AbortError") {
         console.error("Stream error:", error);
-        setMessages((prev) => {
-          const newMessages = [...prev];
-          const lastMsg = newMessages[newMessages.length - 1];
-          if (lastMsg.role === "assistant" && !lastMsg.content.trim()) {
-            newMessages[newMessages.length - 1] = {
-              ...lastMsg,
-              content: `❌ 请求失败：${(error as Error).message}`,
-            };
-          } else {
-            newMessages.push({
-              role: "assistant",
-              content: `❌ 请求失败：${(error as Error).message}`,
-              timestamp: Date.now(),
-            });
-          }
-          return newMessages;
-        });
+        const errorMessage = `❌ 请求失败：${(error as Error).message}`;
+        const updatedMessages = [
+          ...newMessages,
+          { role: "assistant" as const, content: errorMessage, timestamp: Date.now() },
+        ];
+        updateMessages(updatedMessages);
       }
     } finally {
       setLoading(false);
@@ -209,17 +254,14 @@ export default function Home() {
     }
   };
 
+  // ==================== 辅助函数：开始新对话 ====================
   const handleNewChat = () => {
-    if (
-      messages.length === 0 ||
-      confirm("确定要开始新对话吗？当前对话记录将被清空。")
-    ) {
-      setMessages([]);
-      setRetrievedDocs([]);
-      inputRef.current?.focus();
-    }
+    createNewChat();
+    setRetrievedDocs([]);
+    inputRef.current?.focus();
   };
 
+  // ==================== 辅助函数：停止 AI 生成 ====================
   const handleStopGeneration = () => {
     if (streamControllerRef.current) {
       streamControllerRef.current.abort();
@@ -228,35 +270,25 @@ export default function Home() {
     }
   };
 
+  // ==================== 辅助函数：复制消息内容 ====================
   const handleCopy = async (content: string, index: number) => {
     await navigator.clipboard.writeText(content);
     setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
   };
 
+  // ==================== 辅助函数：导出当前对话 ====================
   const handleExport = () => {
-    const exportData = messages.map((msg) => ({
-      role: msg.role === "user" ? "用户" : "AI",
-      content: msg.content,
-      time: new Date(msg.timestamp).toLocaleString("zh-CN"),
-    }));
-
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `聊天记录-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    exportChat(currentChatId || undefined);
   };
 
+  // ==================== 辅助函数：处理预设问题点击 ====================
   const handlePresetQuestion = (question: string) => {
     setInput(question);
     inputRef.current?.focus();
   };
 
+  // ==================== 辅助函数：格式化时间 ====================
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString("zh-CN", {
       hour: "2-digit",
@@ -264,21 +296,179 @@ export default function Home() {
     });
   };
 
+  // ==================== 辅助函数：切换 RAG 设置 ====================
+  const handleToggleRag = () => {
+    updateChatRag(!useRag);
+  };
+
+  // ==================== 辅助函数：编辑完成后聚焦 ====================
+  const handleEditKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      saveChatName();
+    } else if (e.key === "Escape") {
+      cancelEditing();
+    }
+  };
+
+  // ==================== JSX 渲染 ====================
+  if (!isLoaded) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900">
+        <div className="text-white text-xl">加载中...</div>
+      </div>
+    );
+  }
+
   return (
+    // 根容器：全屏高度，渐变背景
     <div className="flex flex-col h-screen bg-gradient-to-br from-gray-900 via-indigo-950 to-gray-900">
-      {/* Decorative background elements */}
+      {/* 装饰性背景元素 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/20 rounded-full blur-3xl"></div>
         <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/20 rounded-full blur-3xl"></div>
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-indigo-500/10 rounded-full blur-3xl"></div>
       </div>
 
-      {/* Header */}
+      {/* 对话列表侧边栏（左侧） */}
+      <aside
+        ref={sidebarRef}
+        className={`fixed left-0 top-0 h-full w-72 bg-black/40 backdrop-blur-xl border-r border-white/10 z-50 transform transition-transform duration-300 ease-in-out ${
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        } lg:translate-x-0 lg:w-64`}
+      >
+        {/* 侧边栏头部 */}
+        <div className="flex items-center justify-between p-4 border-b border-white/10">
+          <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-indigo-400" />
+            对话列表
+          </h2>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="lg:hidden p-1 hover:bg-white/10 rounded transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+
+        {/* 新建对话按钮 */}
+        <div className="p-4">
+          <button
+            onClick={handleNewChat}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl transition-all font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            新建对话
+          </button>
+        </div>
+
+        {/* 对话列表 */}
+        <div className="flex-1 overflow-y-auto px-2 space-y-1" style={{ maxHeight: "calc(100vh - 180px)" }}>
+          {sessions.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">暂无对话</div>
+          ) : (
+            sessions.map((chat) => (
+              <div
+                key={chat.id}
+                className={`group relative rounded-lg transition-all ${
+                  chat.id === currentChatId
+                    ? "bg-white/10 border border-indigo-500/50"
+                    : "hover:bg-white/5 border border-transparent"
+                }`}
+              >
+                {/* 对话项内容 */}
+                <div
+                  onClick={() => switchToChat(chat.id)}
+                  className="p-3 cursor-pointer"
+                >
+                  {editingChatId === chat.id ? (
+                    // 编辑模式
+                    <input
+                      type="text"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      onBlur={saveChatName}
+                      onKeyDown={handleEditKeyDown}
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-full bg-black/50 text-white text-sm px-2 py-1 rounded border border-indigo-500 focus:outline-none"
+                      autoFocus
+                    />
+                  ) : (
+                    // 显示模式
+                    <>
+                      <div className="flex items-start gap-2">
+                        <MessageSquare className="w-4 h-4 text-gray-500 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{chat.name}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {chat.messages.length} 条消息 · {formatDate(chat.updatedAt)}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* 操作按钮（悬停显示） */}
+                {editingChatId !== chat.id && (
+                  <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditing(chat.id, chat.name);
+                      }}
+                      className="p-1 hover:bg-white/20 rounded transition-colors"
+                      title="重命名"
+                    >
+                      <Edit2 className="w-3.5 h-3.5 text-gray-400" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteChat(chat.id);
+                      }}
+                      className="p-1 hover:bg-red-500/20 rounded transition-colors"
+                      title="删除"
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-gray-400 hover:text-red-400" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* 侧边栏底部 */}
+        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-white/10 bg-black/20">
+          <p className="text-xs text-gray-500 text-center">
+            共 {sessions.length} 个对话 · 本地存储
+          </p>
+        </div>
+      </aside>
+
+      {/* 遮罩层（移动端展开侧边栏时显示） */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* 头部区域 */}
       <header
-        className="relative z-20 bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4"
+        className="relative z-20 bg-black/20 backdrop-blur-xl border-b border-white/10 px-6 py-4 flex items-center gap-4"
         style={{ marginRight: "20rem" }}
       >
-        <div className="flex items-center justify-between max-w-5xl mx-auto">
+        {/* 移动端菜单按钮 */}
+        <button
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="lg:hidden p-2 hover:bg-white/10 rounded-lg transition-colors"
+        >
+          <Menu className="w-5 h-5 text-gray-400" />
+        </button>
+
+        <div className="flex items-center justify-between max-w-5xl mx-auto flex-1">
+          {/* 左侧：Logo 和标题 */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
               <Sparkles className="w-5 h-5 text-white" />
@@ -288,31 +478,32 @@ export default function Home() {
               <p className="text-xs text-gray-400">基于 DeepSeek LLM</p>
             </div>
           </div>
+          {/* 右侧：功能按钮组 */}
           <div className="flex items-center gap-2">
-            {/* RAG 开关 */}
+            {/* RAG 开关按钮 */}
             <button
-              onClick={() => setUseRag(!useRag)}
+              onClick={handleToggleRag}
               className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors text-sm ${
                 useRag
                   ? "bg-indigo-500/30 text-indigo-300 border border-indigo-500/50"
                   : "bg-white/5 text-gray-400 border border-white/10"
               }`}
-              title={
-                useRag ? "RAG 已启用 - 基于知识库回答" : "RAG 已禁用 - 普通模式"
-              }
+              title={useRag ? "RAG 已启用 - 基于知识库回答" : "RAG 已禁用 - 普通模式"}
             >
               <BrainCircuit className="w-4 h-4" />
               {useRag ? "RAG ON" : "RAG OFF"}
             </button>
 
+            {/* 导出按钮 */}
             <button
               onClick={handleExport}
-              disabled={messages.length === 0}
+              disabled={currentMessages.length === 0}
               className="p-2 hover:bg-white/10 rounded-lg transition-colors disabled:opacity-30 disabled:cursor-not-allowed group"
               title="导出聊天记录"
             >
               <Download className="w-5 h-5 text-gray-400 group-hover:text-white" />
             </button>
+            {/* 新对话按钮 */}
             <button
               onClick={handleNewChat}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors text-sm"
@@ -324,24 +515,29 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Messages Area */}
+      {/* 消息列表区域 */}
       <div
         className="relative z-20 flex-1 overflow-y-auto"
-        style={{ marginRight: "20rem" }}
+        style={{ marginRight: "20rem", marginLeft: "0rem" }}
       >
         <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
-          {messages.length === 0 ? (
+          {/* 条件渲染：无消息时显示欢迎界面 */}
+          {currentMessages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
+              {/* AI 头像图标 */}
               <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center mb-6 shadow-2xl shadow-indigo-500/30">
                 <Bot className="w-10 h-10 text-white" />
               </div>
+              {/* 欢迎标题 */}
               <h2 className="text-2xl font-bold text-white mb-2">
                 你好，我是你的 AI 助手
               </h2>
+              {/* 欢迎描述 */}
               <p className="text-gray-400 mb-8 text-center max-w-md">
                 我可以帮你解答问题、编写代码、创作内容等。随时问我任何问题！
               </p>
 
+              {/* 预设问题列表 */}
               <div className="w-full max-w-lg">
                 <p className="text-sm text-gray-500 mb-4 text-center">
                   试试这些问题
@@ -363,53 +559,62 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            messages.map((msg, index) => {
+            /* 有条件渲染：有消息时遍历显示 */
+            currentMessages.map((msg, index) => {
+              // 判断是否为最后一条 AI 消息
               const isLastAssistantMsg =
-                msg.role === "assistant" && index === messages.length - 1;
+                msg.role === "assistant" && index === currentMessages.length - 1;
+              // 判断是否有 RAG 引用来源
               const hasSources =
                 isLastAssistantMsg &&
                 retrievedDocs.length > 0 &&
                 retrievedDocs.some((doc) => doc.source && doc.content);
 
               return (
+                // 消息容器：用户消息右对齐，AI 消息左对齐
                 <div
                   key={index}
                   className={`flex gap-4 ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
                 >
+                  {/* AI 头像：仅 AI 消息显示 */}
                   {msg.role === "assistant" && (
                     <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center flex-shrink-0">
                       <Bot className="w-4 h-4 text-white" />
                     </div>
                   )}
 
+                  {/* 消息内容容器 */}
                   <div
                     className={`max-w-[80%] ${msg.role === "user" ? "items-end" : "items-start"}`}
                   >
+                    {/* 消息气泡：用户和 AI 不同样式 */}
                     <div
                       className={`rounded-2xl px-5 py-3 ${
                         msg.role === "user"
-                          ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white"
-                          : "bg-white/10 backdrop-blur-sm text-gray-100 border border-white/10"
+                          ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white" // 用户气泡：渐变背景
+                          : "bg-white/10 backdrop-blur-sm text-gray-100 border border-white/10" // AI 气泡：半透明背景
                       }`}
                     >
                       {msg.role === "user" ? (
-                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                        <p className="whitespace-pre-wrap">{msg.content}</p> // 用户消息：保留换行
                       ) : (
                         <div className="prose prose-invert max-w-none text-sm">
-                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                          <ReactMarkdown>{msg.content}</ReactMarkdown> // AI 消息：Markdown 渲染
                         </div>
                       )}
                     </div>
 
-                    {/* RAG 来源展示 */}
+                    {/* RAG 来源展示：当有检索到的文档时显示 */}
                     {hasSources && (
                       <div className="mt-2 p-3 bg-indigo-900/30 backdrop-blur-sm rounded-xl border border-indigo-500/30">
+                        {/* 标题栏 */}
                         <div className="flex items-center gap-2 mb-2">
                           <Database className="w-4 h-4 text-indigo-400" />
                           <span className="text-xs font-semibold text-indigo-300">
                             知识库引用
                           </span>
                         </div>
+                        {/* 文档列表 */}
                         <div className="space-y-1">
                           {retrievedDocs.map((doc, i) => (
                             <div key={i} className="text-xs">
@@ -425,12 +630,15 @@ export default function Home() {
                       </div>
                     )}
 
+                    {/* 消息元信息：时间和复制按钮 */}
                     <div
                       className={`flex items-center gap-2 mt-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
                     >
+                      {/* 时间戳 */}
                       <span className="text-xs text-gray-500">
                         {formatTime(msg.timestamp)}
                       </span>
+                      {/* 复制按钮：仅 AI 消息显示 */}
                       {msg.role === "assistant" && (
                         <button
                           onClick={() => handleCopy(msg.content, index)}
@@ -438,15 +646,16 @@ export default function Home() {
                           title="复制"
                         >
                           {copiedIndex === index ? (
-                            <Check className="w-3.5 h-3.5 text-green-400" />
+                            <Check className="w-3.5 h-3.5 text-green-400" /> // 已复制：绿色勾选
                           ) : (
-                            <Copy className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" />
+                            <Copy className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300" /> // 未复制：复制图标
                           )}
                         </button>
                       )}
                     </div>
                   </div>
 
+                  {/* 用户头像：仅用户消息显示 */}
                   {msg.role === "user" && (
                     <div className="w-8 h-8 rounded-lg bg-gray-700 flex items-center justify-center flex-shrink-0">
                       <User className="w-4 h-4 text-gray-300" />
@@ -457,22 +666,23 @@ export default function Home() {
             })
           )}
 
-          {loading &&
-            messages.length > 0 &&
-            messages[messages.length - 1].role === "assistant" && (
-              <TypingIndicator />
-            )}
+          {/* 加载中指示器 */}
+          {loading && (
+            <TypingIndicator />
+          )}
 
+          {/* 滚动锚点 */}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input Area */}
+      {/* 输入区域 */}
       <div
         className="relative z-20 bg-black/20 backdrop-blur-xl border-t border-white/10 p-4"
         style={{ marginRight: "20rem" }}
       >
         <form onSubmit={handleSubmit} className="max-w-3xl mx-auto">
+          {/* 输入框容器 */}
           <div className="flex gap-3 items-center bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10 p-2 focus-within:border-indigo-500/50 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
             <input
               ref={inputRef}
@@ -483,6 +693,7 @@ export default function Home() {
               disabled={loading}
               className="flex-1 bg-transparent text-white placeholder-gray-500 px-4 py-2 focus:outline-none disabled:opacity-50"
             />
+            {/* 发送按钮 */}
             <button
               type="submit"
               disabled={loading || !input.trim()}
@@ -490,6 +701,7 @@ export default function Home() {
             >
               <Send className="w-5 h-5 text-white" />
             </button>
+            {/* 停止生成按钮 */}
             {loading && (
               <button
                 type="button"
@@ -501,6 +713,7 @@ export default function Home() {
               </button>
             )}
           </div>
+          {/* 底部提示文字 */}
           <p className="text-center text-xs text-gray-500 mt-3">
             AI 生成的内容可能有误，请自行核实 •{" "}
             {useRag ? "🧠 RAG 知识库已启用" : "💬 普通对话模式"}
@@ -508,7 +721,7 @@ export default function Home() {
         </form>
       </div>
 
-      {/* Knowledge Base Sidebar */}
+      {/* 知识库侧边栏组件 */}
       <KnowledgeBase />
     </div>
   );
