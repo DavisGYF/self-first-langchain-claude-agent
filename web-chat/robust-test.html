@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tesseract.js 稳健测试</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.4/dist/tesseract.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .file-section {
+            background: #f8f9fa;
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .file-section:hover {
+            border-color: #4facfe;
+            background: #f0f8ff;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .file-label {
+            display: inline-block;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .file-label:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.3);
+        }
+
+        .file-info {
+            margin-top: 15px;
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .process-section {
+            margin: 20px 0;
+        }
+
+        .progress-container {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4facfe 0%, #00f2fe 100%);
+            width: 0%;
+            transition: width 0.3s ease;
+            border-radius: 4px;
+        }
+
+        .result-section {
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: 600;
+            color: #4facfe;
+        }
+
+        .result-textarea {
+            width: 100%;
+            height: 200px;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            resize: vertical;
+        }
+
+        .error-section {
+            background: #fff5f5;
+            border: 1px solid #fed7d7;
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+        }
+
+        .error-message {
+            color: #c53030;
+            font-weight: 500;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4facfe;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .info-section {
+            background: linear-gradient(135deg, #ffeaa7 0%, #fab1a0 100%);
+            border-radius: 12px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .info-section h3 {
+            color: #2d3436;
+            margin-bottom: 10px;
+        }
+
+        .info-section ul {
+            color: #636e72;
+            padding-left: 20px;
+        }
+
+        .info-section li {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔍 Tesseract.js OCR 测试</h1>
+            <p>验证OCR功能是否需要下载依赖包</p>
+        </div>
+
+        <div class="content">
+            <div class="file-section">
+                <input type="file" id="fileInput" class="file-input" accept="image/*">
+                <label for="fileInput" class="file-label">📁 选择图片文件</label>
+                <div id="fileInfo" class="file-info">请选择包含文字的图片 (JPG, PNG, WebP)</div>
+            </div>
+
+            <div id="progressContainer" class="progress-container">
+                <div class="progress-info">
+                    <span id="progressText">准备中...</span>
+                    <span id="progressPercent">0%</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+            </div>
+
+            <div id="resultSection" class="result-section">
+                <div class="result-header">
+                    <h3>📄 识别结果</h3>
+                    <button onclick="copyResult()" style="padding: 8px 16px; background: #4facfe; color: white; border: none; border-radius: 6px; cursor: pointer;">📋 复制</button>
+                </div>
+                <div class="result-stats">
+                    <div class="stat-item">
+                        <div class="stat-label">处理时间</div>
+                        <div id="statTime" class="stat-value">-</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">置信度</div>
+                        <div id="statConfidence" class="stat-value">-</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-label">字符数</div>
+                        <div id="statChars" class="stat-value">-</div>
+                    </div>
+                </div>
+                <textarea id="resultText" class="result-textarea" readonly placeholder="OCR识别结果将在这里显示..."></textarea>
+            </div>
+
+            <div id="errorSection" class="error-section">
+                <div class="error-message" id="errorMessage"></div>
+            </div>
+
+            <div class="info-section">
+                <h3>💡 使用说明</h3>
+                <ul>
+                    <li>选择一张包含清晰文字的图片进行测试</li>
+                    <li>首次使用会自动下载语言包（约15-20MB）</li>
+                    <li>下载过程可能需要几分钟时间，请耐心等待</li>
+                    <li>下载完成后，后续使用无需再次下载</li>
+                    <li>支持中文和英文识别</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 安全地获取DOM元素
+        function getElement(id) {
+            const element = document.getElementById(id);
+            if (!element) {
+                console.error('找不到元素:', id);
+                return null;
+            }
+            return element;
+        }
+
+        // 全局变量
+        let selectedFile = null;
+        let isProcessing = false;
+
+        // 初始化事件监听器
+        function initEventListeners() {
+            const fileInput = getElement('fileInput');
+            const fileInfo = getElement('fileInfo');
+
+            if (fileInput && fileInfo) {
+                fileInput.addEventListener('change', function(e) {
+                    const files = e.target.files;
+                    if (files && files.length > 0) {
+                        selectedFile = files[0];
+                        fileInfo.textContent = `已选择: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`;
+                        clearResults();
+                    } else {
+                        selectedFile = null;
+                        fileInfo.textContent = '请选择包含文字的图片 (JPG, PNG, WebP)';
+                    }
+                });
+            }
+        }
+
+        // 清除结果
+        function clearResults() {
+            const resultSection = getElement('resultSection');
+            const progressContainer = getElement('progressContainer');
+            const errorSection = getElement('errorSection');
+
+            if (resultSection) resultSection.style.display = 'none';
+            if (progressContainer) progressContainer.style.display = 'none';
+            if (errorSection) errorSection.style.display = 'none';
+        }
+
+        // 显示进度
+        function showProgress(text, percent = 0) {
+            const progressContainer = getElement('progressContainer');
+            const progressText = getElement('progressText');
+            const progressPercent = getElement('progressPercent');
+            const progressFill = getElement('progressFill');
+
+            if (progressContainer) progressContainer.style.display = 'block';
+            if (progressText) progressText.textContent = text;
+            if (progressPercent) progressPercent.textContent = percent + '%';
+            if (progressFill) progressFill.style.width = percent + '%';
+        }
+
+        // 显示结果
+        function showResult(ocrResult, processingTime) {
+            const resultSection = getElement('resultSection');
+            const statTime = getElement('statTime');
+            const statConfidence = getElement('statConfidence');
+            const statChars = getElement('statChars');
+            const resultText = getElement('resultText');
+
+            if (resultSection) resultSection.style.display = 'block';
+            if (statTime) statTime.textContent = processingTime + 'ms';
+            if (statConfidence) statConfidence.textContent = ocrResult.data.confidence.toFixed(1) + '%';
+            if (statChars) statChars.textContent = ocrResult.data.text.length;
+            if (resultText) resultText.value = ocrResult.data.text || '未识别到文字内容';
+        }
+
+        // 显示错误
+        function showError(message) {
+            const errorSection = getElement('errorSection');
+            const errorMessage = getElement('errorMessage');
+
+            if (errorSection) errorSection.style.display = 'block';
+            if (errorMessage) errorMessage.textContent = message;
+        }
+
+        // 复制结果
+        function copyResult() {
+            const resultText = getElement('resultText');
+            if (resultText && resultText.value) {
+                navigator.clipboard.writeText(resultText.value).then(() => {
+                    alert('结果已复制到剪贴板');
+                }).catch(() => {
+                    alert('复制失败，请手动选择文本复制');
+                });
+            }
+        }
+
+        // 主要的OCR处理函数
+        async function performOCR() {
+            if (!selectedFile) {
+                alert('请先选择一张图片');
+                return;
+            }
+
+            if (isProcessing) {
+                return;
+            }
+
+            isProcessing = true;
+            clearResults();
+
+            try {
+                console.log('开始OCR识别...');
+                console.log('文件信息:', {
+                    name: selectedFile.name,
+                    size: selectedFile.size,
+                    type: selectedFile.type
+                });
+
+                const startTime = Date.now();
+
+                // 检查Tesseract.js是否加载
+                if (typeof Tesseract === 'undefined' || !Tesseract.recognize) {
+                    throw new Error('Tesseract.js未正确加载，请检查网络连接');
+                }
+
+                showProgress('正在初始化Tesseract.js...', 10);
+
+                // 执行OCR识别
+                const ocrResult = await Tesseract.recognize(selectedFile, 'chi_sim+eng', {
+                    logger: (message) => {
+                        console.log('Tesseract日志:', message);
+
+                        if (message.status === 'recognizing text') {
+                            const progress = Math.round(message.progress * 100);
+                            showProgress(`正在识别文字... ${progress}%`, progress);
+                        } else {
+                            let progressPercent = 0;
+                            if (message.status.includes('loading')) {
+                                progressPercent = 30;
+                                showProgress('正在加载语言包...', progressPercent);
+                            } else if (message.status.includes('initializing')) {
+                                progressPercent = 50;
+                                showProgress('正在初始化引擎...', progressPercent);
+                            } else {
+                                showProgress(message.status, 70);
+                            }
+                        }
+                    }
+                });
+
+                const endTime = Date.now();
+                const processingTime = endTime - startTime;
+
+                console.log('OCR识别完成:', ocrResult);
+
+                showProgress('识别完成！', 100);
+                showResult(ocrResult, processingTime);
+
+            } catch (error) {
+                console.error('OCR处理失败:', error);
+                showError('OCR识别失败: ' + (error.message || '未知错误'));
+                showProgress('处理失败', 0);
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        // 绑定按钮事件
+        function bindButtonEvent() {
+            const fileInput = getElement('fileInput');
+            if (fileInput) {
+                // 当文件选择后自动开始OCR
+                fileInput.addEventListener('change', function(e) {
+                    if (e.target.files && e.target.files.length > 0) {
+                        // 延迟执行，确保文件已完全加载
+                        setTimeout(performOCR, 100);
+                    }
+                });
+            }
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('页面加载完成，初始化Tesseract.js测试...');
+            initEventListeners();
+            bindButtonEvent();
+
+            // 检查Tesseract.js是否可用
+            if (typeof Tesseract !== 'undefined') {
+                console.log('✅ Tesseract.js已加载，版本:', Tesseract.version || '未知');
+            } else {
+                console.error('❌ Tesseract.js未加载');
+                showError('Tesseract.js库未正确加载，请刷新页面重试');
+            }
+        });
+
+        // 暴露全局函数
+        window.performOCR = performOCR;
+        window.copyResult = copyResult;
+    </script>
+</body>
+</html>
