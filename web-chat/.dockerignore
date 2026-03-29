@@ -1,0 +1,46 @@
+# 忽略不需要复制到Docker镜像中的文件和目录
+
+# 开发相关
+docker-compose.yml
+Dockerfile
+.git
+.gitignore
+.prettierignore
+
+# 依赖和构建
+node_modules
+.next
+dist
+tmp
+
+# 环境配置
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 编辑器
+.vscode
+.idea
+*.swp
+*.swo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+logs
+*.log
+
+# 测试
+coverage
+.nyc_output
+
+# 文档
+README*
+*.md
+
+# 临时文件
+*.tmp
+.cache
