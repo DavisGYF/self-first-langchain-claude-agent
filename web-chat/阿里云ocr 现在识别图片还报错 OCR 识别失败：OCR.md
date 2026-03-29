@@ -44,3 +44,10 @@ and method.","Recommend":"https://api.aliyun.com/troubleshoot?q=InvalidAction.No
 OCR 识别失败：OCR识别失败：ENOENT: no such file or directory, open '/tmp/ocr_1774752216165.png'
 
 OCR 识别失败：OCR识别失败：Specified api is not found, please check your url and method., URL: https://ocr.cn-shanghai.aliyuncs.com/
+
+OCR 识别失败：OCR识别失败：Specified api is not purchased, open the link to purchase api: https://help.aliyun.com/document_detail/465341.html, URL: https://ocr.cn-shanghai.aliyuncs.com/
+
+最后使用vscode 自带的模型 把这个问题解决了 找到了 真正的原因
+我使用的是 Raptor mini (Preview)。
+
+![alt text](image.png)
