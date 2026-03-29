@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  ocr-app-2:
+    build:
+      context: .
+      args:
+        # 国内默认 true / npmmirror；海外可改为 false + https://registry.npmjs.org
+        USE_CN_APT: "true"
+        NPM_REGISTRY: "https://registry.npmmirror.com"
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000" # 外部端口3001，内部端口3000
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    networks:
+      - ocr-network-2
+    # 健康检查
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/ocr/server-tesseract",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # 资源限制
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+
+networks:
+  ocr-network-2:
+    driver: bridge
+
+# 使用说明：
+# 1. docker-compose -f docker-compose-2.yml up -d          # 启动第二个项目
+# 2. docker-compose -f docker-compose-2.yml down           # 停止第二个项目
+# 3. docker-compose -f docker-compose-2.yml logs -f        # 查看第二个项目日志
+# 4. docker-compose -f docker-compose-2.yml restart ocr-app-2 # 重启第二个项目
