@@ -1,53 +1,21 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  ocr-app:
+  web-chat:
     build:
       context: .
+      args:
+        USE_CN_APT: "true"
+        NPM_REGISTRY: "https://registry.npmmirror.com"
       dockerfile: Dockerfile
     ports:
-      - "3000:3000"
+      - "3001:3000"
     environment:
       - NODE_ENV=production
     restart: unless-stopped
     networks:
-      - ocr-network
-    # 健康检查
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/ocr/server-tesseract"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
-    # 资源限制
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-        reservations:
-          memory: 256M
-
-  # 可选：添加Nginx作为反向代理
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./ssl:/etc/nginx/ssl
-    depends_on:
-      - ocr-app
-    networks:
-      - ocr-network
-    restart: unless-stopped
+      - projects-network
 
 networks:
-  ocr-network:
+  projects-network:
     driver: bridge
-
-# 使用说明：
-# 1. docker-compose up -d          # 启动服务
-# 2. docker-compose down           # 停止服务
-# 3. docker-compose logs -f        # 查看日志
-# 4. docker-compose restart ocr-app # 重启应用
