@@ -13,7 +13,7 @@
  */
 
 import { NextRequest } from 'next/server';
-import crypto from 'crypto';
+const PopCore = require('@alicloud/pop-core');
 
 /**
  * OCR识别结果的数据结构
@@ -45,37 +45,13 @@ const ALIYUN_CONFIG = {
   accessKeySecret: process.env.ALIYUN_ACCESS_KEY_SECRET || '',
   endpoint: 'https://ocr.cn-shanghai.aliyuncs.com',
   apiVersion: '2019-12-30',
-  action: 'RecognizeGeneral'
+  action: 'RecognizeGeneralText'
 };
 
 /**
  * 生成阿里云API签名
  * 参考阿里云签名算法v1.0
  */
-function generateSignature(params: Record<string, string>, secret: string): string {
-  // 1. 按参数名称排序
-  const sortedKeys = Object.keys(params).sort();
-
-  // 2. 构造规范化查询字符串
-  const canonicalizedQueryString = sortedKeys
-    .map(key => {
-      const encodedKey = encodeURIComponent(key);
-      const encodedValue = encodeURIComponent(params[key]);
-      return `${encodedKey}=${encodedValue}`;
-    })
-    .join('&');
-
-  // 3. 构造待签名的字符串
-  const stringToSign = `POST&${encodeURIComponent('/')}&${encodeURIComponent(canonicalizedQueryString)}`;
-
-  // 4. 计算HMAC-SHA1签名
-  const hmac = crypto.createHmac('sha1', `${secret}&`);
-  hmac.update(stringToSign);
-  const signature = hmac.digest('base64');
-
-  return encodeURIComponent(signature);
-}
-
 /**
  * 保存上传文件到临时目录
  */
@@ -91,7 +67,9 @@ async function saveUploadedFile(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    require('fs').promises.writeFile(tempFilePath, buffer);
+    const fs = require('fs');
+    await fs.promises.mkdir(tempDir, { recursive: true });
+    await fs.promises.writeFile(tempFilePath, buffer);
 
     return tempFilePath;
   } catch (error) {
@@ -116,46 +94,70 @@ async function callAliyunOCR(imagePath: string): Promise<OCRResponse> {
     const imageBuffer = await fs.promises.readFile(imagePath);
     const imageBase64 = imageBuffer.toString('base64');
 
-    // 构造请求参数
-    const timestamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const nonce = Math.random().toString(36).substring(2);
-
-    const requestParams: Record<string, string> = {
-      AccessKeyId: ALIYUN_CONFIG.accessKeyId,
-      Action: ALIYUN_CONFIG.action,
-      Version: ALIYUN_CONFIG.apiVersion,
-      Format: 'JSON',
-      SignatureMethod: 'HMAC-SHA1',
-      SignatureVersion: '1.0',
-      SignatureNonce: nonce,
-      Timestamp: timestamp,
-      RegionId: 'cn-shanghai',
-      ImageURL: '', // 这里需要传图片URL，我们改用ImageContent
-      ImageContent: imageBase64,
-      Scene: 'general'
-    };
-
-    // 生成签名
-    const signature = generateSignature(requestParams, ALIYUN_CONFIG.accessKeySecret);
-    requestParams.Signature = signature;
-
-    console.log('🔍 调用阿里云OCR API...');
-
-    // 发送请求
-    const response = await fetch(ALIYUN_CONFIG.endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: Object.keys(requestParams)
-        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(requestParams[key])}`)
-        .join('&')
+    const client = new PopCore.ROAClient({
+      accessKeyId: ALIYUN_CONFIG.accessKeyId,
+      accessKeySecret: ALIYUN_CONFIG.accessKeySecret,
+      endpoint: ALIYUN_CONFIG.endpoint,
+      apiVersion: ALIYUN_CONFIG.apiVersion,
     });
 
-    const result = await response.json();
+    console.log('🔍 调用阿里云OCR API (ROA)...');
 
-    if (!response.ok) {
-      throw new Error(`阿里云API调用失败: ${JSON.stringify(result)}`);
+    let result: any = null;
+    let lastError: any = null;
+
+    try {
+      const body = JSON.stringify({
+        ImageContent: imageBase64,
+        Scene: 'general'
+      });
+
+      result = await client.post(
+        '/green/image/ocr',
+        {},
+        body,
+        {
+          'Content-Type': 'application/json'
+        },
+        {
+          timeout: 30000
+        }
+      );
+    } catch (roaError) {
+      lastError = roaError;
+      console.warn('阿里云OCR ROA调用失败，开始RPC备选尝试:', roaError instanceof Error ? roaError.message : roaError);
+
+      const rpcClient = new PopCore.RPCClient({
+        accessKeyId: ALIYUN_CONFIG.accessKeyId,
+        accessKeySecret: ALIYUN_CONFIG.accessKeySecret,
+        endpoint: ALIYUN_CONFIG.endpoint,
+        apiVersion: ALIYUN_CONFIG.apiVersion,
+      });
+
+      const attempts = [
+        { action: 'RecognizeGeneralText', params: { ImageContent: imageBase64, RegionId: 'cn-shanghai' } },
+        { action: 'RecognizeGeneralText', params: { ImageBase64: imageBase64, RegionId: 'cn-shanghai' } },
+        { action: 'RecognizeGeneral', params: { ImageContent: imageBase64, RegionId: 'cn-shanghai' } },
+        { action: 'RecognizeGeneral', params: { ImageBase64: imageBase64, RegionId: 'cn-shanghai' } },
+      ];
+
+      for (const attempt of attempts) {
+        try {
+          result = await rpcClient.request(attempt.action, attempt.params, {
+            method: 'POST',
+            timeout: 30000,
+          });
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err;
+          console.warn(`阿里云OCR RPC尝试失败: ${attempt.action}`, err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
+    if (!result) {
+      throw lastError ?? new Error('阿里云API调用失败，无法匹配正确的 OCR 操作');
     }
 
     // 处理阿里云OCR响应
