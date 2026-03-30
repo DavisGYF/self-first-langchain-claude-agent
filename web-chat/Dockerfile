@@ -10,14 +10,14 @@ COPY package*.json ./
 
 # 安装项目依赖
 # --frozen-lockfile: 确保使用package-lock.json中的确切版本
-RUN npm ci --frozen-lockfile
+RUN echo "📦 Step 1: Installing dependencies..." && npm ci --frozen-lockfile && echo "✅ Step 1 Complete!"
 
 # 复制项目源代码
 COPY . .
 
 # 构建生产版本
 # --no-cache: 不使用缓存，确保全新构建
-RUN npm run build
+RUN echo "🚀 Step 2: Building Next.js application..." && npm run build && echo "✅ Step 2 Complete!"
 
 # 第二阶段 - 运行应用
 FROM node:20-alpine AS runner
