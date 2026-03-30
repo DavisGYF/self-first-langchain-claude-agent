@@ -89,8 +89,8 @@ async function callTesseractOCR(
     }> = [];
 
     // 提取文本块信息
-    if (result.data.words) {
-      result.data.words.forEach((word: any) => {
+    if ((result as any).data?.words) {
+      (result as any).data.words.forEach((word: any) => {
         if (word.text && word.text.trim()) {
           blocks.push({
             text: word.text,
@@ -107,8 +107,8 @@ async function callTesseractOCR(
     }
 
     // 提取行文本块
-    if (result.data.lines) {
-      result.data.lines.forEach((line: any) => {
+    if ((result as any).data?.lines) {
+      (result as any).data.lines.forEach((line: any) => {
         if (line.text && line.text.trim()) {
           blocks.push({
             text: line.text,
