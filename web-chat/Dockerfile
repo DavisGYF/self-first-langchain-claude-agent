@@ -38,9 +38,9 @@ COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-# 设置文件权限
-RUN chown -R nextjs:nodejs /app/.next
-RUN chown -R nextjs:nodejs /app/public
+# 创建知识库目录并设置文件权限
+RUN mkdir -p /app/knowledge_base
+RUN chown -R nextjs:nodejs /app
 
 # 切换到非root用户
 USER nextjs
